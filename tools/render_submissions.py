@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import ssl
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -39,6 +40,11 @@ def main() -> int:
         default=os.environ.get("UWC_ADMIN_TOKEN"),
         help="Admin token. Prefer setting UWC_ADMIN_TOKEN instead of passing this.",
     )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        help="Disable TLS certificate verification if this Python install lacks macOS certificates.",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -66,7 +72,7 @@ def main() -> int:
         print("Set UWC_ADMIN_TOKEN or pass --token.", file=sys.stderr)
         return 2
 
-    client = AdminClient(args.base_url, args.token)
+    client = AdminClient(args.base_url, args.token, insecure=args.insecure)
 
     try:
         if args.command == "list":
@@ -97,9 +103,10 @@ class AdminError(Exception):
 
 
 class AdminClient:
-    def __init__(self, base_url: str, token: str) -> None:
+    def __init__(self, base_url: str, token: str, insecure: bool = False) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
+        self.context = ssl._create_unverified_context() if insecure else None
 
     def list_submissions(self) -> list[dict[str, str]]:
         data = self.request("GET", "/api/admin/submissions")
@@ -132,7 +139,7 @@ class AdminClient:
         )
 
         try:
-            with urlopen(request, timeout=20) as response:
+            with urlopen(request, timeout=20, context=self.context) as response:
                 text = response.read().decode("utf-8")
         except HTTPError as error:
             details = error.read().decode("utf-8", errors="replace")

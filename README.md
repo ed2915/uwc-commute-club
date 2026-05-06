@@ -54,6 +54,9 @@ python3 tools/render_submissions.py set sub_abc123 --status matched --matched-gr
 python3 tools/render_submissions.py delete sub_abc123
 ```
 
+If macOS Python reports a certificate verification error, either run Python's
+certificate installer or add `--insecure` to the command on your own machine.
+
 Set a private `ADMIN_TOKEN` environment variable on the Render service before using the tool.
 The admin endpoints return 404 until `ADMIN_TOKEN` is configured.
 
