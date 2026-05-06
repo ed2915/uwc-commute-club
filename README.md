@@ -50,9 +50,14 @@ The Render CSV can be inspected and maintained with the local Python script:
 ```sh
 export UWC_ADMIN_TOKEN="use-the-same-value-as-render-admin-token"
 python3 tools/render_submissions.py list
+python3 tools/render_submissions.py suggest-matches
 python3 tools/render_submissions.py set sub_abc123 --status matched --matched-group-id group_1
 python3 tools/render_submissions.py delete sub_abc123
 ```
+
+Suggested matches are pending entries with the same direction, the same suburb,
+and at least one overlapping day/time. Add `--apply` to `suggest-matches` to
+mark each suggested group as matched with a generated group id.
 
 If macOS Python reports a certificate verification error, either run Python's
 certificate installer or add `--insecure` to the command on your own machine.

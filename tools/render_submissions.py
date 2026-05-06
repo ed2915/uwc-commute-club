@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
+from datetime import datetime, timezone
 import json
 import os
 import ssl
@@ -66,6 +68,22 @@ def main() -> int:
     )
     patch_parser.add_argument("--matched-group-id")
 
+    suggest_parser = subparsers.add_parser(
+        "suggest-matches",
+        help="Suggest pending groups with the same direction, area, and overlapping schedule.",
+    )
+    suggest_parser.add_argument(
+        "--min-size",
+        type=int,
+        default=2,
+        help="Minimum number of submissions in a suggested group. Default: 2",
+    )
+    suggest_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Mark suggested groups as matched with generated group ids.",
+    )
+
     args = parser.parse_args()
 
     if not args.token:
@@ -91,6 +109,13 @@ def main() -> int:
             result = client.patch_submission(args.id, patch)
             print("Updated:")
             print_table([result["submission"]])
+        elif args.command == "suggest-matches":
+            submissions = client.list_submissions()
+            groups = suggest_matches(submissions, min_size=args.min_size)
+            print_match_groups(groups)
+
+            if args.apply:
+                apply_match_groups(client, groups)
     except AdminError as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
@@ -184,6 +209,132 @@ def print_table(rows: list[dict[str, str]]) -> None:
 
 def display(value: str) -> str:
     return str(value).replace("\n", " ").strip()
+
+
+def suggest_matches(
+    submissions: list[dict[str, str]],
+    min_size: int = 2,
+) -> list[dict[str, object]]:
+    pending = [
+        submission
+        for submission in submissions
+        if submission.get("status", "pending") == "pending"
+        and submission.get("direction") in {"to_uwc", "from_uwc"}
+        and submission.get("area")
+    ]
+    buckets: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
+
+    for submission in pending:
+        key = (submission["direction"], normalize_area_key(submission["area"]))
+        buckets[key].append(submission)
+
+    groups = []
+    for (direction, area_key), rows in buckets.items():
+        rows = sorted(rows, key=lambda row: row.get("submitted_at", ""))
+        schedule_map: dict[str, list[dict[str, str]]] = defaultdict(list)
+
+        for row in rows:
+            for cell in schedule_cells(row):
+                schedule_map[cell].append(row)
+
+        neighbors: dict[str, set[str]] = {row["id"]: set() for row in rows}
+        by_id = {row["id"]: row for row in rows}
+
+        for cell_rows in schedule_map.values():
+            ids = [row["id"] for row in cell_rows]
+            for row_id in ids:
+                neighbors[row_id].update(other_id for other_id in ids if other_id != row_id)
+
+        visited = set()
+        for row in rows:
+            if row["id"] in visited:
+                continue
+
+            component_ids = collect_component(row["id"], neighbors)
+            visited.update(component_ids)
+            if len(component_ids) < min_size:
+                continue
+
+            cell_rows = [by_id[row_id] for row_id in component_ids]
+            common_cells = set.intersection(*(schedule_cells(cell_row) for cell_row in cell_rows))
+            shared_schedule = "|".join(sorted(common_cells)) if common_cells else "overlapping times"
+
+            groups.append({
+                "direction": direction,
+                "area": display_area(area_key, cell_rows),
+                "shared_schedule": shared_schedule,
+                "rows": sorted(cell_rows, key=lambda item: item.get("submitted_at", "")),
+            })
+
+    return sorted(
+        groups,
+        key=lambda group: (
+            str(group["direction"]),
+            str(group["area"]),
+            str(group["shared_schedule"]),
+        ),
+    )
+
+
+def print_match_groups(groups: list[dict[str, object]]) -> None:
+    if not groups:
+        print("No suggested matches.")
+        return
+
+    for index, group in enumerate(groups, start=1):
+        rows = group["rows"]
+        print()
+        print(
+            f"Group {index}: {group['direction']} | {group['area']} | "
+            f"shared time {group['shared_schedule']} | {len(rows)} people"
+        )
+        print_table(rows)
+
+
+def apply_match_groups(client: AdminClient, groups: list[dict[str, object]]) -> None:
+    if not groups:
+        return
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+
+    for index, group in enumerate(groups, start=1):
+        group_id = f"group_{stamp}_{index}"
+        print()
+        print(f"Applying {group_id}")
+
+        for row in group["rows"]:
+            result = client.patch_submission(
+                row["id"],
+                {"status": "matched", "matched_group_id": group_id},
+            )
+            submission = result["submission"]
+            print(f"  {submission['id']} -> matched")
+
+
+def schedule_cells(row: dict[str, str]) -> set[str]:
+    return {cell for cell in row.get("schedule", "").split("|") if cell}
+
+
+def collect_component(start_id: str, neighbors: dict[str, set[str]]) -> set[str]:
+    component = set()
+    stack = [start_id]
+
+    while stack:
+        row_id = stack.pop()
+        if row_id in component:
+            continue
+        component.add(row_id)
+        stack.extend(neighbors[row_id] - component)
+
+    return component
+
+
+def normalize_area_key(area: str) -> str:
+    return " ".join(area.lower().split())
+
+
+def display_area(area_key: str, rows: list[dict[str, str]]) -> str:
+    return next((row.get("area", "") for row in rows if normalize_area_key(row.get("area", "")) == area_key), area_key)
 
 
 if __name__ == "__main__":
