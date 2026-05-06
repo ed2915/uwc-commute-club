@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { appendFile, mkdir, readFile, stat } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,6 +9,7 @@ const dataDir = process.env.DATA_DIR || join(__dirname, "data");
 const submissionsFile = join(dataDir, "submissions.csv");
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || (process.env.RENDER ? "0.0.0.0" : "127.0.0.1");
+const adminToken = process.env.ADMIN_TOKEN || "";
 
 const csvHeaders = [
   "id",
@@ -43,6 +44,16 @@ createServer(async (request, response) => {
 
     if (request.method === "GET" && url.pathname === "/api/popular-routes") {
       await handlePopularRoutes(response);
+      return;
+    }
+
+    if (url.pathname === "/api/admin/submissions") {
+      await handleAdminSubmissions(request, response);
+      return;
+    }
+
+    if (url.pathname.startsWith("/api/admin/submissions/")) {
+      await handleAdminSubmission(request, response, url.pathname);
       return;
     }
 
@@ -141,6 +152,108 @@ async function handlePopularRoutes(response) {
   sendJson(response, 200, { routes });
 }
 
+async function handleAdminSubmissions(request, response) {
+  if (!authorizeAdmin(request, response)) return;
+
+  if (request.method !== "GET") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const submissions = await readSubmissions();
+  sendJson(response, 200, { submissions });
+}
+
+async function handleAdminSubmission(request, response, pathname) {
+  if (!authorizeAdmin(request, response)) return;
+
+  const id = decodeURIComponent(pathname.replace("/api/admin/submissions/", ""));
+  if (!id) {
+    sendJson(response, 400, { error: "Submission id is required" });
+    return;
+  }
+
+  if (request.method === "DELETE") {
+    const submissions = await readSubmissions();
+    const nextSubmissions = submissions.filter((submission) => submission.id !== id);
+
+    if (nextSubmissions.length === submissions.length) {
+      sendJson(response, 404, { error: "Submission not found" });
+      return;
+    }
+
+    await writeSubmissions(nextSubmissions);
+    sendJson(response, 200, { ok: true, deleted: id });
+    return;
+  }
+
+  if (request.method === "PATCH") {
+    const payload = await readRequestJson(request);
+    const validationError = validateAdminPatch(payload);
+
+    if (validationError) {
+      sendJson(response, 400, { error: validationError });
+      return;
+    }
+
+    const submissions = await readSubmissions();
+    const index = submissions.findIndex((submission) => submission.id === id);
+
+    if (index === -1) {
+      sendJson(response, 404, { error: "Submission not found" });
+      return;
+    }
+
+    submissions[index] = { ...submissions[index], ...payload };
+    await writeSubmissions(submissions);
+    sendJson(response, 200, { ok: true, submission: submissions[index] });
+    return;
+  }
+
+  sendJson(response, 405, { error: "Method not allowed" });
+}
+
+function authorizeAdmin(request, response) {
+  if (!adminToken) {
+    sendJson(response, 404, { error: "Not found" });
+    return false;
+  }
+
+  const header = request.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+
+  if (token !== adminToken) {
+    sendJson(response, 401, { error: "Unauthorized" });
+    return false;
+  }
+
+  return true;
+}
+
+function validateAdminPatch(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "Patch body must be an object";
+
+  const allowedFields = new Set(["direction", "area", "schedule", "nickname", "status", "matched_group_id"]);
+  const fields = Object.keys(payload);
+  if (fields.length === 0) return "Patch body is empty";
+  if (!fields.every((field) => allowedFields.has(field))) return "Patch contains an unsupported field";
+
+  if ("direction" in payload && !["to_uwc", "from_uwc"].includes(payload.direction)) return "Direction is invalid";
+  if ("area" in payload && !isText(payload.area)) return "Area is invalid";
+  if ("schedule" in payload && !String(payload.schedule).split("|").filter(Boolean).every(isScheduleCell)) return "Schedule is invalid";
+  if ("nickname" in payload && !isValidNickname(payload.nickname)) return "Nickname is invalid";
+  if ("status" in payload && !["pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
+
+  for (const field of fields) {
+    payload[field] = String(payload[field] || "").trim();
+  }
+
+  if ("nickname" in payload) payload.nickname = normalizeNickname(payload.nickname);
+  if ("area" in payload) payload.area = normalizeArea(payload.area);
+
+  return "";
+}
+
 function isText(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -176,6 +289,18 @@ async function readSubmissions() {
       const values = parseCsvLine(line);
       return Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
     });
+}
+
+async function writeSubmissions(submissions) {
+  const lines = [
+    csvHeaders.join(","),
+    ...submissions.map((submission) => csvHeaders
+      .map((header) => csvCell(submission[header] || ""))
+      .join(","))
+  ];
+  const tempFile = `${submissionsFile}.tmp`;
+  await writeFile(tempFile, `${lines.join("\n")}\n`);
+  await rename(tempFile, submissionsFile);
 }
 
 function parseCsvLine(line) {

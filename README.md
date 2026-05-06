@@ -43,6 +43,20 @@ Manual Render settings:
 
 The app binds to Render's provided `PORT` and stores `submissions.csv` inside `DATA_DIR`.
 
+## Admin Submissions Tool
+
+The Render CSV can be inspected and maintained with the local Python script:
+
+```sh
+export UWC_ADMIN_TOKEN="use-the-same-value-as-render-admin-token"
+python3 tools/render_submissions.py list
+python3 tools/render_submissions.py set sub_abc123 --status matched --matched-group-id group_1
+python3 tools/render_submissions.py delete sub_abc123
+```
+
+Set a private `ADMIN_TOKEN` environment variable on the Render service before using the tool.
+The admin endpoints return 404 until `ADMIN_TOKEN` is configured.
+
 ## Captured Fields
 
 - Travelling to UWC or from UWC
