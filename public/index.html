@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>UWC Commute Club</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="intro">
+        <p class="eyebrow">Pilot for University of the Western Cape commuters</p>
+        <h1>UWC Commute Club</h1>
+        <p class="lede">Find students near you travelling to or from campus at similar times.</p>
+      </section>
+
+      <form id="tripForm" class="trip-form">
+        <fieldset>
+          <legend>Direction</legend>
+          <div class="segmented">
+            <label>
+              <input type="radio" name="direction" value="to_uwc" checked>
+              <span>To UWC</span>
+            </label>
+            <label>
+              <input type="radio" name="direction" value="from_uwc">
+              <span>From UWC</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="field-grid">
+          <label>
+            <span id="suburbLabel">Starting suburb</span>
+            <select name="area" required>
+              <option value="">Choose a suburb</option>
+              <option value="Athlone">Athlone</option>
+              <option value="Belhar">Belhar</option>
+              <option value="Bellville">Bellville</option>
+              <option value="Bellville South">Bellville South</option>
+              <option value="Bishop Lavis">Bishop Lavis</option>
+              <option value="Blue Downs">Blue Downs</option>
+              <option value="Bonteheuwel">Bonteheuwel</option>
+              <option value="Brackenfell">Brackenfell</option>
+              <option value="Brooklyn">Brooklyn</option>
+              <option value="Claremont">Claremont</option>
+              <option value="Delft">Delft</option>
+              <option value="Durbanville">Durbanville</option>
+              <option value="Eerste River">Eerste River</option>
+              <option value="Elsies River">Elsies River</option>
+              <option value="Gatesville">Gatesville</option>
+              <option value="Goodwood">Goodwood</option>
+              <option value="Grassy Park">Grassy Park</option>
+              <option value="Gugulethu">Gugulethu</option>
+              <option value="Hanover Park">Hanover Park</option>
+              <option value="Kraaifontein">Kraaifontein</option>
+              <option value="Khayelitsha">Khayelitsha</option>
+              <option value="Kuils River">Kuils River</option>
+              <option value="Langa">Langa</option>
+              <option value="Lansdowne">Lansdowne</option>
+              <option value="Lotus River">Lotus River</option>
+              <option value="Maitland">Maitland</option>
+              <option value="Manenberg">Manenberg</option>
+              <option value="Mitchells Plain">Mitchells Plain</option>
+              <option value="Mfuleni">Mfuleni</option>
+              <option value="Milnerton">Milnerton</option>
+              <option value="Montague Gardens">Montague Gardens</option>
+              <option value="Nyanga">Nyanga</option>
+              <option value="Parow">Parow</option>
+              <option value="Philippi">Philippi</option>
+              <option value="Pinelands">Pinelands</option>
+              <option value="Ravensmead">Ravensmead</option>
+              <option value="Retreat">Retreat</option>
+              <option value="Rondebosch">Rondebosch</option>
+              <option value="Salt River">Salt River</option>
+              <option value="Strandfontein">Strandfontein</option>
+              <option value="Thornton">Thornton</option>
+              <option value="Woodstock">Woodstock</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>Travel schedule</legend>
+          <p class="hint">Pick each day and time you usually want to start travelling.</p>
+          <div class="schedule-wrap">
+            <div class="schedule-grid" id="scheduleGrid"></div>
+          </div>
+        </fieldset>
+
+        <div class="field-grid">
+          <label>
+            Nickname
+            <input name="nickname" required autocomplete="off" minlength="3" maxlength="16" pattern="[a-z0-9]+" placeholder="shortname">
+            <span class="field-help">Use 3-16 lowercase letters and numbers. No spaces, symbols, or real names.</span>
+          </label>
+        </div>
+
+        <p class="privacy">For this class test, use a nickname only. Do not enter your real name, phone number, student number, or exact address.</p>
+        <button type="submit">Join the pilot</button>
+        <p id="status" class="status" role="status"></p>
+      </form>
+
+      <section class="popular-routes" aria-labelledby="popularRoutesTitle">
+        <div>
+          <p class="eyebrow">Live pilot demand</p>
+          <h2 id="popularRoutesTitle">Popular routes</h2>
+        </div>
+        <div class="route-columns">
+          <section aria-labelledby="toRoutesTitle">
+            <h3 id="toRoutesTitle">To UWC</h3>
+            <div id="toUwcRoutes" class="route-list">
+              <p class="empty-routes">No routes yet.</p>
+            </div>
+          </section>
+          <section aria-labelledby="fromRoutesTitle">
+            <h3 id="fromRoutesTitle">From UWC</h3>
+            <div id="fromUwcRoutes" class="route-list">
+              <p class="empty-routes">No routes yet.</p>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script src="/script.js"></script>
+  </body>
+</html>
