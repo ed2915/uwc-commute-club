@@ -95,19 +95,38 @@ async function handleSubmission(request, response) {
     return;
   }
 
-  const row = [
-    createSubmissionId(),
-    new Date().toISOString(),
-    payload.direction,
-    payload.area,
-    payload.schedule.join("|"),
-    normalizeNickname(payload.nickname),
-    "pending",
-    ""
-  ].map(csvCell).join(",");
+  const submissions = await readSubmissions();
+  const nickname = normalizeNickname(payload.nickname);
+  const area = normalizeArea(payload.area);
+  const existingKeys = new Set(submissions.flatMap(submissionInterestKeys));
+  const submittedAt = new Date().toISOString();
+  const rows = [...new Set(payload.schedule)]
+    .filter((schedule) => !existingKeys.has(interestKey({
+      direction: payload.direction,
+      area,
+      schedule,
+      nickname
+    })))
+    .map((schedule) => [
+      createSubmissionId(),
+      submittedAt,
+      payload.direction,
+      area,
+      schedule,
+      nickname,
+      "pending",
+      ""
+    ].map(csvCell).join(","));
 
-  await appendFile(submissionsFile, `${row}\n`);
-  sendJson(response, 201, { ok: true });
+  if (rows.length > 0) {
+    await appendFile(submissionsFile, `${rows.join("\n")}\n`);
+  }
+
+  sendJson(response, 201, {
+    ok: true,
+    added: rows.length,
+    skippedDuplicates: payload.schedule.length - rows.length
+  });
 }
 
 function validateSubmission(payload) {
@@ -123,13 +142,18 @@ function validateSubmission(payload) {
 async function handlePopularRoutes(response) {
   const submissions = await readSubmissions();
   const routeMap = new Map();
+  const countedKeys = new Set();
 
   for (const submission of submissions) {
     const area = normalizeArea(submission.area);
     if (submission.status && submission.status !== "pending") continue;
     if (!area || !["to_uwc", "from_uwc"].includes(submission.direction)) continue;
 
-    for (const schedule of submission.schedule.split("|").filter(Boolean)) {
+    for (const schedule of scheduleCells(submission)) {
+      const countedKey = interestKey({ ...submission, area, schedule });
+      if (countedKeys.has(countedKey)) continue;
+      countedKeys.add(countedKey);
+
       const key = `${submission.direction}|${area.toLowerCase()}|${schedule}`;
       const route = routeMap.get(key) || {
         direction: submission.direction,
@@ -271,6 +295,25 @@ function isValidNickname(value) {
 
 function isScheduleCell(value) {
   return typeof value === "string" && /^(mon|tue|wed|thu|fri)@\d{2}:\d{2}$/.test(value);
+}
+
+function scheduleCells(submission) {
+  return String(submission.schedule || "").split("|").filter(Boolean);
+}
+
+function submissionInterestKeys(submission) {
+  if (["deleted", "archived"].includes(submission.status)) return [];
+
+  return scheduleCells(submission).map((schedule) => interestKey({ ...submission, schedule }));
+}
+
+function interestKey({ direction, area, schedule, nickname }) {
+  return [
+    direction,
+    normalizeArea(area).toLowerCase(),
+    schedule,
+    normalizeNickname(nickname)
+  ].join("|");
 }
 
 function createSubmissionId() {

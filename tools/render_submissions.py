@@ -52,6 +52,15 @@ def main() -> int:
 
     subparsers.add_parser("list", help="List all submissions.")
     subparsers.add_parser("json", help="Print raw JSON.")
+    dedupe_parser = subparsers.add_parser(
+        "dedupe",
+        help="Remove duplicate nickname/route/time interests from existing rows.",
+    )
+    dedupe_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply the dedupe plan. Without this, only prints what would change.",
+    )
 
     delete_parser = subparsers.add_parser("delete", help="Delete a submission by id.")
     delete_parser.add_argument("id")
@@ -101,6 +110,12 @@ def main() -> int:
         elif args.command == "delete":
             result = client.delete_submission(args.id)
             print(f"Deleted {result.get('deleted', args.id)}")
+        elif args.command == "dedupe":
+            submissions = client.list_submissions()
+            plan = dedupe_plan(submissions)
+            print_dedupe_plan(plan)
+            if args.apply:
+                apply_dedupe_plan(client, plan)
         elif args.command == "set":
             patch = build_patch(args)
             if not patch:
@@ -184,6 +199,57 @@ def build_patch(args: argparse.Namespace) -> dict[str, str]:
     if args.matched_group_id is not None:
         patch["matched_group_id"] = args.matched_group_id
     return patch
+
+
+def dedupe_plan(submissions: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
+    seen = set()
+    delete_rows = []
+    patch_rows = []
+
+    for row in submissions:
+        cells = sorted(schedule_cells(row))
+        if not cells:
+            delete_rows.append(row)
+            continue
+
+        keep_cells = []
+        for cell in cells:
+            key = interest_key(row, cell)
+            if key in seen:
+                continue
+            seen.add(key)
+            keep_cells.append(cell)
+
+        if not keep_cells:
+            delete_rows.append(row)
+            continue
+
+        normalized_schedule = "|".join(keep_cells)
+        if row.get("schedule") != normalized_schedule:
+            patch_rows.append({**row, "schedule": normalized_schedule})
+
+    return {"delete": delete_rows, "patch": patch_rows}
+
+
+def print_dedupe_plan(plan: dict[str, list[dict[str, str]]]) -> None:
+    print(f"Rows to update: {len(plan['patch'])}")
+    if plan["patch"]:
+        print_table(plan["patch"])
+
+    print()
+    print(f"Rows to delete: {len(plan['delete'])}")
+    if plan["delete"]:
+        print_table(plan["delete"])
+
+
+def apply_dedupe_plan(client: AdminClient, plan: dict[str, list[dict[str, str]]]) -> None:
+    for row in plan["patch"]:
+        client.patch_submission(row["id"], {"schedule": row["schedule"]})
+        print(f"Updated {row['id']}")
+
+    for row in plan["delete"]:
+        client.delete_submission(row["id"])
+        print(f"Deleted {row['id']}")
 
 
 def print_table(rows: list[dict[str, str]]) -> None:
@@ -313,6 +379,15 @@ def apply_match_groups(client: AdminClient, groups: list[dict[str, object]]) -> 
 
 def schedule_cells(row: dict[str, str]) -> set[str]:
     return {cell for cell in row.get("schedule", "").split("|") if cell}
+
+
+def interest_key(row: dict[str, str], schedule: str) -> tuple[str, str, str, str]:
+    return (
+        row.get("direction", ""),
+        normalize_area_key(row.get("area", "")),
+        schedule,
+        row.get("nickname", "").lower(),
+    )
 
 
 def collect_component(start_id: str, neighbors: dict[str, set[str]]) -> set[str]:

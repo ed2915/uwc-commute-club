@@ -83,7 +83,13 @@ form.addEventListener("submit", async (event) => {
     }
 
     form.reset();
-    setStatus("You are in the anonymous class pilot list.", "success");
+    if (result.added === 0) {
+      setStatus("Those route and time choices were already on the anonymous pilot list.", "success");
+    } else if (result.skippedDuplicates > 0) {
+      setStatus("New route and time choices were added. Repeated choices were skipped.", "success");
+    } else {
+      setStatus("You are in the anonymous class pilot list.", "success");
+    }
     loadPopularRoutes();
   } catch (error) {
     setStatus(error.message, "error");
