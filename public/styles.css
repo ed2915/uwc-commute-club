@@ -360,7 +360,7 @@ button:disabled {
 
 .heatmap-grid {
   display: grid;
-  min-width: 520px;
+  min-width: 0;
 }
 
 .heatmap-corner,
@@ -382,6 +382,17 @@ button:disabled {
   background: #f8fbf9;
   font-size: 0.84rem;
   font-weight: 800;
+}
+
+.heatmap-head {
+  min-height: 66px;
+  padding: 5px 3px;
+}
+
+.heatmap-head span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
 }
 
 .heatmap-suburb {
@@ -426,6 +437,29 @@ button:disabled {
   color: var(--muted);
 }
 
+.day-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.day-tab {
+  min-height: 38px;
+  padding: 8px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.day-tab[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
 @media (max-width: 680px) {
   .shell {
     padding-inline: 10px;
@@ -454,5 +488,21 @@ button:disabled {
   .schedule-grid {
     grid-template-columns: 66px repeat(5, 54px);
     min-width: 336px;
+  }
+
+  .heatmap-grid {
+    min-width: 0;
+  }
+
+  .heatmap-corner,
+  .heatmap-suburb {
+    font-size: 0.78rem;
+  }
+
+  .heatmap-corner,
+  .heatmap-head,
+  .heatmap-suburb,
+  .heatmap-cell {
+    padding: 5px;
   }
 }

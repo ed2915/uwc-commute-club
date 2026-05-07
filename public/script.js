@@ -33,6 +33,10 @@ const toUwcRoutes = document.querySelector("#toUwcRoutes");
 const fromUwcRoutes = document.querySelector("#fromUwcRoutes");
 const uniqueUserCount = document.querySelector("#uniqueUserCount");
 const nicknameInput = form.elements.nickname;
+const selectedHeatmapDays = {
+  to_uwc: "mon",
+  from_uwc: "mon"
+};
 
 renderScheduleGrid();
 loadPopularRoutes();
@@ -143,21 +147,23 @@ function renderPopularRoutes(routes) {
   const toRoutes = routes.filter((route) => route.direction === "to_uwc");
   const fromRoutes = routes.filter((route) => route.direction === "from_uwc");
 
-  renderRouteHeatmap(toUwcRoutes, toRoutes);
-  renderRouteHeatmap(fromUwcRoutes, fromRoutes);
+  renderRouteHeatmap(toUwcRoutes, toRoutes, "to_uwc");
+  renderRouteHeatmap(fromUwcRoutes, fromRoutes, "from_uwc");
 }
 
-function renderRouteHeatmap(container, routes) {
+function renderRouteHeatmap(container, routes, direction) {
   if (routes.length === 0) {
     container.innerHTML = `<p class="empty-routes">No routes yet.</p>`;
     return;
   }
 
-  const suburbs = [...new Set(routes.map((route) => route.area))].sort((a, b) => a.localeCompare(b));
-  const schedules = [...new Set(routes.map((route) => route.schedule))].sort(compareSchedules);
-  const counts = new Map(routes.map((route) => [`${route.area}|${route.schedule}`, route.interested]));
+  const selectedDay = selectedHeatmapDays[direction];
+  const visibleRoutes = routes.filter((route) => getScheduleDay(route.schedule) === selectedDay);
+  const suburbs = [...new Set(visibleRoutes.map((route) => route.area))].sort((a, b) => a.localeCompare(b));
+  const schedules = [...new Set(visibleRoutes.map((route) => route.schedule))].sort(compareSchedules);
+  const counts = new Map(visibleRoutes.map((route) => [`${route.area}|${route.schedule}`, route.interested]));
   const maxInterest = Math.max(...routes.map((route) => route.interested), 1);
-  const headerCells = schedules.map((schedule) => `<div class="heatmap-head">${escapeHtml(formatSchedule(schedule))}</div>`).join("");
+  const headerCells = schedules.map((schedule) => `<div class="heatmap-head"><span>${escapeHtml(formatScheduleTime(schedule))}</span></div>`).join("");
   const rows = suburbs.map((suburb) => {
     const cells = schedules.map((schedule) => {
       const count = counts.get(`${suburb}|${schedule}`) || 0;
@@ -171,16 +177,33 @@ function renderRouteHeatmap(container, routes) {
       ${cells}
     `;
   }).join("");
-
-  container.innerHTML = `
+  const grid = visibleRoutes.length === 0 ? `<p class="empty-routes">No routes for ${escapeHtml(formatDay(selectedDay))} yet.</p>` : `
     <div class="heatmap-wrap">
-      <div class="heatmap-grid" style="grid-template-columns: minmax(128px, 1.2fr) repeat(${schedules.length}, minmax(72px, 1fr));">
+      <div class="heatmap-grid" style="grid-template-columns: minmax(128px, 1.2fr) repeat(${schedules.length}, minmax(44px, 1fr));">
         <div class="heatmap-corner">Suburb</div>
         ${headerCells}
         ${rows}
       </div>
     </div>
   `;
+
+  container.innerHTML = `
+    ${grid}
+    <div class="day-tabs" role="tablist" aria-label="${direction === "to_uwc" ? "To UWC" : "From UWC"} heatmap day">
+      ${days.map(([day, label]) => `
+        <button class="day-tab" type="button" data-direction="${direction}" data-day="${day}" aria-selected="${day === selectedDay}">
+          ${label}
+        </button>
+      `).join("")}
+    </div>
+  `;
+
+  container.querySelectorAll(".day-tab").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedHeatmapDays[button.dataset.direction] = button.dataset.day;
+      renderRouteHeatmap(container, routes, direction);
+    });
+  });
 }
 
 function updateSuburbLabel() {
@@ -192,6 +215,18 @@ function formatSchedule(schedule) {
   const [day, time] = String(schedule || "").split("@");
   const dayLabel = days.find(([value]) => value === day)?.[1] || day;
   return `${dayLabel} ${time || ""}`.trim();
+}
+
+function formatScheduleTime(schedule) {
+  return String(schedule || "").split("@")[1] || "";
+}
+
+function getScheduleDay(schedule) {
+  return String(schedule || "").split("@")[0] || "mon";
+}
+
+function formatDay(day) {
+  return days.find(([value]) => value === day)?.[1] || day;
 }
 
 function compareSchedules(first, second) {
