@@ -175,8 +175,7 @@ async function handlePopularRoutes(response) {
   }
 
   const routes = [...routeMap.values()]
-    .sort((a, b) => b.interested - a.interested || a.start.localeCompare(b.start))
-    .slice(0, 8);
+    .sort((a, b) => b.interested - a.interested || a.start.localeCompare(b.start));
 
   sendJson(response, 200, { routes, uniqueUsers: uniqueUsers.size });
 }
