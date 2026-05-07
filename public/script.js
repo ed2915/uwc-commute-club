@@ -160,7 +160,7 @@ function renderRouteHeatmap(container, routes, direction) {
   const selectedDay = selectedHeatmapDays[direction];
   const visibleRoutes = routes.filter((route) => getScheduleDay(route.schedule) === selectedDay);
   const suburbs = [...new Set(visibleRoutes.map((route) => route.area))].sort((a, b) => a.localeCompare(b));
-  const schedules = [...new Set(visibleRoutes.map((route) => route.schedule))].sort(compareSchedules);
+  const schedules = timeSlots.map((time) => `${selectedDay}@${time}`);
   const counts = new Map(visibleRoutes.map((route) => [`${route.area}|${route.schedule}`, route.interested]));
   const maxInterest = Math.max(...routes.map((route) => route.interested), 1);
   const headerCells = schedules.map((schedule) => `<div class="heatmap-head"><span>${escapeHtml(formatScheduleTime(schedule))}</span></div>`).join("");
