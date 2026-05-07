@@ -143,9 +143,14 @@ async function handlePopularRoutes(response) {
   const submissions = await readSubmissions();
   const routeMap = new Map();
   const countedKeys = new Set();
+  const uniqueUsers = new Set();
 
   for (const submission of submissions) {
     const area = normalizeArea(submission.area);
+    if (!["deleted", "archived"].includes(submission.status) && normalizeNickname(submission.nickname)) {
+      uniqueUsers.add(normalizeNickname(submission.nickname));
+    }
+
     if (submission.status && submission.status !== "pending") continue;
     if (!area || !["to_uwc", "from_uwc"].includes(submission.direction)) continue;
 
@@ -173,7 +178,7 @@ async function handlePopularRoutes(response) {
     .sort((a, b) => b.interested - a.interested || a.start.localeCompare(b.start))
     .slice(0, 8);
 
-  sendJson(response, 200, { routes });
+  sendJson(response, 200, { routes, uniqueUsers: uniqueUsers.size });
 }
 
 async function handleAdminSubmissions(request, response) {

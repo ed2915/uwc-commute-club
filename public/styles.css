@@ -83,6 +83,39 @@ h3 {
   margin-top: 18px;
 }
 
+.routes-heading {
+  display: flex;
+  gap: 14px;
+  align-items: end;
+  justify-content: space-between;
+}
+
+.user-count {
+  min-width: 116px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fbf9;
+  text-align: right;
+}
+
+.user-count span:first-child {
+  display: block;
+  color: var(--accent-dark);
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.user-count span:last-child {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 fieldset {
   min-width: 0;
   margin: 0;
@@ -403,8 +436,19 @@ button:disabled {
   }
 
   .field-grid,
-  .segmented {
+  .segmented,
+  .routes-heading {
     grid-template-columns: 1fr;
+  }
+
+  .routes-heading {
+    display: grid;
+    align-items: start;
+  }
+
+  .user-count {
+    width: 100%;
+    text-align: left;
   }
 
   .schedule-grid {

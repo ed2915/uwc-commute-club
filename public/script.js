@@ -31,6 +31,7 @@ const scheduleGrid = document.querySelector("#scheduleGrid");
 const suburbLabel = document.querySelector("#suburbLabel");
 const toUwcRoutes = document.querySelector("#toUwcRoutes");
 const fromUwcRoutes = document.querySelector("#fromUwcRoutes");
+const uniqueUserCount = document.querySelector("#uniqueUserCount");
 const nicknameInput = form.elements.nickname;
 
 renderScheduleGrid();
@@ -129,8 +130,10 @@ async function loadPopularRoutes() {
   try {
     const response = await fetch("/api/popular-routes");
     const result = await response.json();
+    uniqueUserCount.textContent = String(result.uniqueUsers || 0);
     renderPopularRoutes(result.routes || []);
   } catch {
+    uniqueUserCount.textContent = "0";
     toUwcRoutes.innerHTML = `<p class="empty-routes">Popular routes could not be loaded.</p>`;
     fromUwcRoutes.innerHTML = `<p class="empty-routes">Popular routes could not be loaded.</p>`;
   }
