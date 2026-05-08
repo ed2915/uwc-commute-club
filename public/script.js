@@ -139,7 +139,7 @@ removeStudentNumberButton.addEventListener("click", async () => {
 
     if (result.deleted > 0) {
       form.reset();
-      setStatus(`Removed ${result.deleted} route-pool entries linked to that student number.`, "success");
+      setStatus(`Removed that student number from the database and deleted ${result.deleted} linked route-pool entries.`, "success");
       loadPopularRoutes();
     } else {
       setStatus("No route-pool entries were found for that student number.", "success");
