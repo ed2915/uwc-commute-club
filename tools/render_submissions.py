@@ -392,7 +392,7 @@ def interest_key(row: dict[str, str], schedule: str) -> tuple[str, str, str, str
         row.get("direction", ""),
         normalize_area_key(row.get("area", "")),
         schedule,
-        row.get("student_number", ""),
+        row.get("student_number") or row.get("pilot_code") or row.get("nickname") or row.get("id", ""),
     )
 
 

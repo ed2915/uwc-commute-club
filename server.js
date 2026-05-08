@@ -177,8 +177,9 @@ async function handlePopularRoutes(response) {
 
   for (const submission of submissions) {
     const area = normalizeArea(submission.area);
-    if (!["deleted", "archived"].includes(submission.status) && identityKey(submission.student_number)) {
-      uniqueUsers.add(identityKey(submission.student_number));
+    const submissionIdentity = submissionIdentityKey(submission);
+    if (!["deleted", "archived"].includes(submission.status) && submissionIdentity) {
+      uniqueUsers.add(submissionIdentity);
     }
 
     if (submission.status && submission.status !== "pending") continue;
@@ -340,13 +341,17 @@ function submissionInterestKeys(submission) {
   return scheduleCells(submission).map((schedule) => interestKey({ ...submission, schedule }));
 }
 
-function interestKey({ direction, area, schedule, student_number }) {
+function interestKey(submission) {
   return [
-    direction,
-    normalizeArea(area).toLowerCase(),
-    schedule,
-    identityKey(student_number)
+    submission.direction,
+    normalizeArea(submission.area).toLowerCase(),
+    submission.schedule,
+    submissionIdentityKey(submission)
   ].join("|");
+}
+
+function submissionIdentityKey(submission) {
+  return identityKey(submission.student_number) || identityKey(submission.pilot_code) || identityKey(submission.nickname) || identityKey(submission.id);
 }
 
 function identityKey(value) {
