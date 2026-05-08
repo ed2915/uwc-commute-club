@@ -90,31 +90,31 @@
 
         <div class="field-grid">
           <label>
-            Student number
-            <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="7" maxlength="7" pattern="[0-9]{7}" placeholder="1234567">
-            <span class="field-help">Use exactly 7 digits. Your student number is used to place you in route/time pools.</span>
+            Random 4-digit code
+            <input name="pilotCode" required autocomplete="off" inputmode="numeric" minlength="4" maxlength="4" pattern="[0-9]{4}" placeholder="1234">
+            <span class="field-help">Choose any random 4-digit code. Do not use your student number or another personal identifier.</span>
           </label>
         </div>
 
         <section class="privacy-notice" aria-labelledby="privacyTitle">
           <h2 id="privacyTitle">Privacy and consent</h2>
-          <p>UWC Commute Club collects your student number, direction, suburb, and selected travel times only to group route/time interest.</p>
-          <p>Providing your student number is voluntary, but it is needed to join route pools and avoid duplicate entries. Your route interest will be kept only for this commute-club project and should be deleted when it is no longer needed for that purpose.</p>
-          <p>You can remove your student number and all route-pool entries linked to it at any time using the remove button below. When you remove it, the student number is deleted from the active database, and no extra copies are kept by this app that would continue to store it.</p>
-          <p>Your student number, or a student email address based on it, will not be shared with anyone in a pool unless you give explicit consent at a later stage.</p>
+          <p>UWC Commute Club collects your random 4-digit code, direction, suburb, and selected travel times only to group route/time interest.</p>
+          <p>Providing a random code is voluntary, but it is needed to join route pools and avoid duplicate entries. Your route interest will be kept only for this commute-club project and should be deleted when it is no longer needed for that purpose.</p>
+          <p>You can remove your code and all route-pool entries linked to it at any time using the remove button below. When you remove it, the code is deleted from the active database, and no extra copies are kept by this app that would continue to store it.</p>
+          <p>Your code will not be shared with anyone in a pool unless you give explicit consent at a later stage.</p>
           <p>Public heatmaps show aggregate counts only. Admin access is token-protected.</p>
         </section>
 
         <label class="consent-check">
           <input type="checkbox" name="privacyConsent" value="yes" required>
-          <span>I consent to UWC Commute Club collecting my student number to group my route/time interest. I understand it will not be shared with other students, and that any later sharing of my student email/contact details will require separate consent.</span>
+          <span>I consent to UWC Commute Club collecting my random 4-digit code to group my route/time interest. I understand it will not be shared with other students, and that any later sharing of contact details will require separate consent.</span>
         </label>
 
         <div class="form-actions">
           <button type="submit">Join route pools</button>
-          <button class="secondary-action" type="button" id="removeStudentNumber">Remove my student number</button>
+          <button class="secondary-action" type="button" id="removePilotCode">Remove my code</button>
         </div>
-        <p class="field-help">To remove your student number from the database, enter it above and use the remove button. This deletes all route-pool entries linked to that student number.</p>
+        <p class="field-help">To remove your code from the database, enter it above and use the remove button. This deletes all route-pool entries linked to that code.</p>
         <p id="status" class="status" role="status"></p>
       </form>
 

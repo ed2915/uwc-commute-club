@@ -36,8 +36,8 @@ const suburbLabel = document.querySelector("#suburbLabel");
 const toUwcRoutes = document.querySelector("#toUwcRoutes");
 const fromUwcRoutes = document.querySelector("#fromUwcRoutes");
 const uniqueUserCount = document.querySelector("#uniqueUserCount");
-const studentNumberInput = form.elements.studentNumber;
-const removeStudentNumberButton = document.querySelector("#removeStudentNumber");
+const pilotCodeInput = form.elements.pilotCode;
+const removePilotCodeButton = document.querySelector("#removePilotCode");
 const selectedHeatmapDays = {
   to_uwc: "mon",
   from_uwc: "mon"
@@ -51,8 +51,8 @@ form.addEventListener("change", (event) => {
   if (event.target.name === "direction") updateSuburbLabel();
 });
 
-studentNumberInput.addEventListener("input", () => {
-  studentNumberInput.value = normalizeStudentNumber(studentNumberInput.value);
+pilotCodeInput.addEventListener("input", () => {
+  pilotCodeInput.value = normalizePilotCode(pilotCodeInput.value);
 });
 
 form.addEventListener("submit", async (event) => {
@@ -64,12 +64,12 @@ form.addEventListener("submit", async (event) => {
     direction: formData.get("direction"),
     area: clean(formData.get("area")),
     schedule: formData.getAll("schedule"),
-    studentNumber: normalizeStudentNumber(formData.get("studentNumber")),
+    pilotCode: normalizePilotCode(formData.get("pilotCode")),
     privacyConsent: formData.get("privacyConsent") === "yes"
   };
 
-  if (!isValidStudentNumber(payload.studentNumber)) {
-    setStatus("Use a valid 7-digit student number.", "error");
+  if (!isValidPilotCode(payload.pilotCode)) {
+    setStatus("Use a valid 4-digit code.", "error");
     return;
   }
 
@@ -100,7 +100,7 @@ form.addEventListener("submit", async (event) => {
 
     form.reset();
     if (result.added === 0) {
-      setStatus("Those route and time choices were already linked to this student number.", "success");
+      setStatus("Those route and time choices were already linked to this code.", "success");
     } else if (result.skippedDuplicates > 0) {
       setStatus("New route and time choices were added. Repeated choices were skipped.", "success");
     } else {
@@ -114,40 +114,40 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-removeStudentNumberButton.addEventListener("click", async () => {
+removePilotCodeButton.addEventListener("click", async () => {
   setStatus("", "");
 
-  const studentNumber = normalizeStudentNumber(studentNumberInput.value);
-  if (!isValidStudentNumber(studentNumber)) {
-    setStatus("Enter your 7-digit student number before removing it.", "error");
+  const pilotCode = normalizePilotCode(pilotCodeInput.value);
+  if (!isValidPilotCode(pilotCode)) {
+    setStatus("Enter your 4-digit code before removing it.", "error");
     return;
   }
 
-  removeStudentNumberButton.disabled = true;
+  removePilotCodeButton.disabled = true;
 
   try {
-    const response = await fetch("/api/remove-student-number", {
+    const response = await fetch("/api/remove-pilot-code", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentNumber })
+      body: JSON.stringify({ pilotCode })
     });
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error(result.error || "Could not remove your student number");
+      throw new Error(result.error || "Could not remove your code");
     }
 
     if (result.deleted > 0) {
       form.reset();
-      setStatus(`Removed that student number from the database and deleted ${result.deleted} linked route-pool entries.`, "success");
+      setStatus(`Removed that code from the database and deleted ${result.deleted} linked route-pool entries.`, "success");
       loadPopularRoutes();
     } else {
-      setStatus("No route-pool entries were found for that student number.", "success");
+      setStatus("No route-pool entries were found for that code.", "success");
     }
   } catch (error) {
     setStatus(error.message, "error");
   } finally {
-    removeStudentNumberButton.disabled = false;
+    removePilotCodeButton.disabled = false;
   }
 });
 
@@ -291,14 +291,14 @@ function clean(value) {
   return String(value || "").trim();
 }
 
-function normalizeStudentNumber(value) {
+function normalizePilotCode(value) {
   return String(value || "")
     .replace(/\D/g, "")
-    .slice(0, 7);
+    .slice(0, 4);
 }
 
-function isValidStudentNumber(value) {
-  return /^\d{7}$/.test(value);
+function isValidPilotCode(value) {
+  return /^\d{4}$/.test(value);
 }
 
 function escapeHtml(value) {

@@ -22,7 +22,7 @@ FIELDS = [
     "direction",
     "area",
     "schedule",
-    "student_number",
+    "pilot_code",
     "status",
     "matched_group_id",
 ]
@@ -54,7 +54,7 @@ def main() -> int:
     subparsers.add_parser("json", help="Print raw JSON.")
     dedupe_parser = subparsers.add_parser(
         "dedupe",
-        help="Remove duplicate student-number/route/time interests from existing rows.",
+        help="Remove duplicate code/route/time interests from existing rows.",
     )
     dedupe_parser.add_argument(
         "--apply",
@@ -70,7 +70,7 @@ def main() -> int:
     patch_parser.add_argument("--direction", choices=["to_uwc", "from_uwc"])
     patch_parser.add_argument("--area")
     patch_parser.add_argument("--schedule", help="Example: mon@07:00|wed@08:30")
-    patch_parser.add_argument("--student-number")
+    patch_parser.add_argument("--pilot-code")
     patch_parser.add_argument(
         "--status",
         choices=["pending", "matched", "deleted", "archived"],
@@ -196,8 +196,8 @@ def build_patch(args: argparse.Namespace) -> dict[str, str]:
         value = getattr(args, field)
         if value is not None:
             patch[field] = value
-    if args.student_number is not None:
-        patch["student_number"] = "".join(char for char in args.student_number if char.isdigit())
+    if args.pilot_code is not None:
+        patch["pilot_code"] = "".join(char for char in args.pilot_code if char.isdigit())
     if args.matched_group_id is not None:
         patch["matched_group_id"] = args.matched_group_id
     return patch
@@ -392,14 +392,14 @@ def interest_key(row: dict[str, str], schedule: str) -> tuple[str, str, str, str
         row.get("direction", ""),
         normalize_area_key(row.get("area", "")),
         schedule,
-        row.get("student_number", ""),
+        row.get("pilot_code", ""),
     )
 
 
 def normalize_submission(row: dict[str, str]) -> dict[str, str]:
-    if row.get("student_number"):
+    if row.get("pilot_code"):
         return row
-    return {**row, "student_number": row.get("nickname", "")}
+    return {**row, "pilot_code": row.get("student_number") or row.get("nickname", "")}
 
 
 def collect_component(start_id: str, neighbors: dict[str, set[str]]) -> set[str]:
