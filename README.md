@@ -81,9 +81,19 @@ The admin endpoints return 404 until `ADMIN_TOKEN` is configured.
 - Student number, used to group route/time pool interest
 - Popular route and time counts from captured submissions
 
+## Privacy Handling
+
 Student numbers are collected initially only to determine who falls into common
 route/time pools. Student numbers, or student email addresses derived from them,
 must not be shared with other people in a pool without explicit consent at a
 later stage.
+
+Before submission, users must tick an explicit consent checkbox confirming this
+limited purpose. Providing a student number is voluntary, but it is required to
+join route pools and prevent duplicate entries.
+
+Public pages show aggregate heatmap counts only. Raw student numbers are
+available only through the token-protected admin tool. Route-interest records
+should be deleted when they are no longer needed for the commute-club project.
 
 Submissions are kept with a `status` field. Future matching can mark records as `matched` with a `matched_group_id`, which keeps an audit trail while preventing already-connected people from being matched again.

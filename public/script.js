@@ -63,7 +63,8 @@ form.addEventListener("submit", async (event) => {
     direction: formData.get("direction"),
     area: clean(formData.get("area")),
     schedule: formData.getAll("schedule"),
-    studentNumber: normalizeStudentNumber(formData.get("studentNumber"))
+    studentNumber: normalizeStudentNumber(formData.get("studentNumber")),
+    privacyConsent: formData.get("privacyConsent") === "yes"
   };
 
   if (!isValidStudentNumber(payload.studentNumber)) {
@@ -73,6 +74,11 @@ form.addEventListener("submit", async (event) => {
 
   if (payload.schedule.length === 0) {
     setStatus("Please choose at least one day and time in the schedule.", "error");
+    return;
+  }
+
+  if (!payload.privacyConsent) {
+    setStatus("Please consent to the privacy terms before joining route pools.", "error");
     return;
   }
 

@@ -96,7 +96,19 @@
           </label>
         </div>
 
-        <p class="privacy">Your student number is collected now only to determine which route/time pools you fall into. Your student number, or a student email address based on it, will not be shared with anyone in a pool unless you give explicit consent at a later stage.</p>
+        <section class="privacy-notice" aria-labelledby="privacyTitle">
+          <h2 id="privacyTitle">Privacy and consent</h2>
+          <p>UWC Commute Club collects your student number, direction, suburb, and selected travel times only to group route/time interest.</p>
+          <p>Providing your student number is voluntary, but it is needed to join route pools and avoid duplicate entries. Your route interest will be kept only for this commute-club project and should be deleted when it is no longer needed for that purpose.</p>
+          <p>Your student number, or a student email address based on it, will not be shared with anyone in a pool unless you give explicit consent at a later stage.</p>
+          <p>Public heatmaps show aggregate counts only. Admin access is token-protected.</p>
+        </section>
+
+        <label class="consent-check">
+          <input type="checkbox" name="privacyConsent" value="yes" required>
+          <span>I consent to UWC Commute Club collecting my student number to group my route/time interest. I understand it will not be shared with other students, and that any later sharing of my student email/contact details will require separate consent.</span>
+        </label>
+
         <button type="submit">Join route pools</button>
         <p id="status" class="status" role="status"></p>
       </form>

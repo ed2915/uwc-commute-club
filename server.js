@@ -140,6 +140,7 @@ function validateSubmission(payload) {
   if (!Array.isArray(payload.schedule) || payload.schedule.length === 0) return "Choose at least one day and time";
   if (!payload.schedule.every(isScheduleCell)) return "One of the selected schedule times is invalid";
   if (!isValidStudentNumber(payload.studentNumber)) return "Use a valid 7-digit student number";
+  if (payload.privacyConsent !== true) return "Consent is required to collect your student number";
   return "";
 }
 
