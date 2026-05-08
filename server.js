@@ -351,7 +351,7 @@ function interestKey({ direction, area, schedule, student_number }) {
 
 function identityKey(value) {
   const text = String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  return /^\d+$/.test(text) ? normalizeStudentNumber(text) : text;
+  return text;
 }
 
 function createSubmissionId() {
@@ -369,9 +369,10 @@ async function readSubmissions() {
     .map((line) => {
       const values = parseCsvLine(line);
       const submission = Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
-      if (!submission.student_number && submission.nickname) {
-        submission.student_number = submission.nickname;
+      if (!submission.student_number) {
+        submission.student_number = submission.pilot_code || submission.nickname || "";
       }
+      delete submission.pilot_code;
       delete submission.nickname;
       return submission;
     });

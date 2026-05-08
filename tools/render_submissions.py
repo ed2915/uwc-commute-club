@@ -399,7 +399,7 @@ def interest_key(row: dict[str, str], schedule: str) -> tuple[str, str, str, str
 def normalize_submission(row: dict[str, str]) -> dict[str, str]:
     if row.get("student_number"):
         return row
-    return {**row, "student_number": row.get("nickname", "")}
+    return {**row, "student_number": row.get("pilot_code") or row.get("nickname", "")}
 
 
 def collect_component(start_id: str, neighbors: dict[str, set[str]]) -> set[str]:
