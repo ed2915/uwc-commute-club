@@ -1,6 +1,6 @@
 # UWC Commute Club
 
-A small web-first pilot for grouping University of the Western Cape commuters by area, day, and travel time.
+A small web-first app for grouping University of the Western Cape commuters by area, day, and travel time.
 
 ## Part 1
 
@@ -57,8 +57,8 @@ python3 tools/render_submissions.py delete sub_abc123
 ```
 
 New submissions are stored as one interest row per selected day/time cell. If a
-nickname submits the same direction, suburb, and day/time again, the duplicate
-interest is skipped instead of counted twice.
+student number submits the same direction, suburb, and day/time again, the
+duplicate interest is skipped instead of counted twice.
 
 Suggested matches are pending entries with the same direction, the same suburb,
 and at least one overlapping day/time. Add `--apply` to `suggest-matches` to
@@ -78,7 +78,12 @@ The admin endpoints return 404 until `ADMIN_TOKEN` is configured.
 - Travelling to UWC or from UWC
 - Starting suburb from an alphabetic list
 - Travel schedule as exact day/time selections
-- Nickname only, with no personal details
+- Student number, used to group route/time pool interest
 - Popular route and time counts from captured submissions
+
+Student numbers are collected initially only to determine who falls into common
+route/time pools. Student numbers, or student email addresses derived from them,
+must not be shared with other people in a pool without explicit consent at a
+later stage.
 
 Submissions are kept with a `status` field. Future matching can mark records as `matched` with a `matched_group_id`, which keeps an audit trail while preventing already-connected people from being matched again.

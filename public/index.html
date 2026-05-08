@@ -9,7 +9,7 @@
   <body>
     <main class="shell">
       <section class="intro">
-        <p class="eyebrow">Pilot for University of the Western Cape commuters</p>
+        <p class="eyebrow">For University of the Western Cape commuters</p>
         <h1>UWC Commute Club</h1>
         <p class="lede">Find students near you travelling to or from campus at similar times.</p>
       </section>
@@ -90,21 +90,21 @@
 
         <div class="field-grid">
           <label>
-            Nickname
-            <input name="nickname" required autocomplete="off" minlength="3" maxlength="16" pattern="[a-z0-9]+" placeholder="shortname">
-            <span class="field-help">Use 3-16 lowercase letters and numbers. No spaces, symbols, or real names.</span>
+            Student number
+            <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" placeholder="12345678">
+            <span class="field-help">Use digits only. Your student number is used to place you in route/time pools.</span>
           </label>
         </div>
 
-        <p class="privacy">For this class test, use a nickname only. Do not enter your real name, phone number, student number, or exact address.</p>
-        <button type="submit">Join the pilot</button>
+        <p class="privacy">Your student number is collected now only to determine which route/time pools you fall into. Your student number, or a student email address based on it, will not be shared with anyone in a pool unless you give explicit consent at a later stage.</p>
+        <button type="submit">Join route pools</button>
         <p id="status" class="status" role="status"></p>
       </form>
 
       <section class="popular-routes" aria-labelledby="popularRoutesTitle">
         <div class="routes-heading">
           <div>
-            <p class="eyebrow">Live pilot demand</p>
+            <p class="eyebrow">Live route demand</p>
             <h2 id="popularRoutesTitle">Popular routes</h2>
           </div>
           <div class="user-count" aria-live="polite">

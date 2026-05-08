@@ -32,7 +32,7 @@ const suburbLabel = document.querySelector("#suburbLabel");
 const toUwcRoutes = document.querySelector("#toUwcRoutes");
 const fromUwcRoutes = document.querySelector("#fromUwcRoutes");
 const uniqueUserCount = document.querySelector("#uniqueUserCount");
-const nicknameInput = form.elements.nickname;
+const studentNumberInput = form.elements.studentNumber;
 const selectedHeatmapDays = {
   to_uwc: "mon",
   from_uwc: "mon"
@@ -46,8 +46,8 @@ form.addEventListener("change", (event) => {
   if (event.target.name === "direction") updateSuburbLabel();
 });
 
-nicknameInput.addEventListener("input", () => {
-  nicknameInput.value = normalizeNickname(nicknameInput.value);
+studentNumberInput.addEventListener("input", () => {
+  studentNumberInput.value = normalizeStudentNumber(studentNumberInput.value);
 });
 
 form.addEventListener("submit", async (event) => {
@@ -59,11 +59,11 @@ form.addEventListener("submit", async (event) => {
     direction: formData.get("direction"),
     area: clean(formData.get("area")),
     schedule: formData.getAll("schedule"),
-    nickname: normalizeNickname(formData.get("nickname"))
+    studentNumber: normalizeStudentNumber(formData.get("studentNumber"))
   };
 
-  if (!isValidNickname(payload.nickname)) {
-    setStatus("Use a short nickname with lowercase letters and numbers only.", "error");
+  if (!isValidStudentNumber(payload.studentNumber)) {
+    setStatus("Use a valid student number with 6-12 digits.", "error");
     return;
   }
 
@@ -89,11 +89,11 @@ form.addEventListener("submit", async (event) => {
 
     form.reset();
     if (result.added === 0) {
-      setStatus("Those route and time choices were already on the anonymous pilot list.", "success");
+      setStatus("Those route and time choices were already linked to this student number.", "success");
     } else if (result.skippedDuplicates > 0) {
       setStatus("New route and time choices were added. Repeated choices were skipped.", "success");
     } else {
-      setStatus("You are in the anonymous class pilot list.", "success");
+      setStatus("Your route and time choices were added.", "success");
     }
     loadPopularRoutes();
   } catch (error) {
@@ -243,15 +243,14 @@ function clean(value) {
   return String(value || "").trim();
 }
 
-function normalizeNickname(value) {
+function normalizeStudentNumber(value) {
   return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .slice(0, 16);
+    .replace(/\D/g, "")
+    .slice(0, 12);
 }
 
-function isValidNickname(value) {
-  return /^[a-z0-9]{3,16}$/.test(value);
+function isValidStudentNumber(value) {
+  return /^\d{6,12}$/.test(value);
 }
 
 function escapeHtml(value) {

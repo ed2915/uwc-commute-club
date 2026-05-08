@@ -17,7 +17,7 @@ const csvHeaders = [
   "direction",
   "area",
   "schedule",
-  "nickname",
+  "student_number",
   "status",
   "matched_group_id",
 ];
@@ -83,7 +83,11 @@ async function ensureCsvFile() {
     await stat(submissionsFile);
   } catch {
     await appendFile(submissionsFile, `${csvHeaders.join(",")}\n`);
+    return;
   }
+
+  const submissions = await readSubmissions();
+  await writeSubmissions(submissions);
 }
 
 async function handleSubmission(request, response) {
@@ -96,7 +100,7 @@ async function handleSubmission(request, response) {
   }
 
   const submissions = await readSubmissions();
-  const nickname = normalizeNickname(payload.nickname);
+  const studentNumber = normalizeStudentNumber(payload.studentNumber);
   const area = normalizeArea(payload.area);
   const existingKeys = new Set(submissions.flatMap(submissionInterestKeys));
   const submittedAt = new Date().toISOString();
@@ -105,7 +109,7 @@ async function handleSubmission(request, response) {
       direction: payload.direction,
       area,
       schedule,
-      nickname
+      student_number: studentNumber
     })))
     .map((schedule) => [
       createSubmissionId(),
@@ -113,7 +117,7 @@ async function handleSubmission(request, response) {
       payload.direction,
       area,
       schedule,
-      nickname,
+      studentNumber,
       "pending",
       ""
     ].map(csvCell).join(","));
@@ -135,7 +139,7 @@ function validateSubmission(payload) {
   if (!isText(payload.area)) return "Choose or enter a starting area";
   if (!Array.isArray(payload.schedule) || payload.schedule.length === 0) return "Choose at least one day and time";
   if (!payload.schedule.every(isScheduleCell)) return "One of the selected schedule times is invalid";
-  if (!isValidNickname(payload.nickname)) return "Use a nickname with 3-16 lowercase letters and numbers";
+  if (!isValidStudentNumber(payload.studentNumber)) return "Use a valid student number with 6-12 digits";
   return "";
 }
 
@@ -147,8 +151,8 @@ async function handlePopularRoutes(response) {
 
   for (const submission of submissions) {
     const area = normalizeArea(submission.area);
-    if (!["deleted", "archived"].includes(submission.status) && normalizeNickname(submission.nickname)) {
-      uniqueUsers.add(normalizeNickname(submission.nickname));
+    if (!["deleted", "archived"].includes(submission.status) && identityKey(submission.student_number)) {
+      uniqueUsers.add(identityKey(submission.student_number));
     }
 
     if (submission.status && submission.status !== "pending") continue;
@@ -261,7 +265,7 @@ function authorizeAdmin(request, response) {
 function validateAdminPatch(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "Patch body must be an object";
 
-  const allowedFields = new Set(["direction", "area", "schedule", "nickname", "status", "matched_group_id"]);
+  const allowedFields = new Set(["direction", "area", "schedule", "student_number", "status", "matched_group_id"]);
   const fields = Object.keys(payload);
   if (fields.length === 0) return "Patch body is empty";
   if (!fields.every((field) => allowedFields.has(field))) return "Patch contains an unsupported field";
@@ -269,14 +273,14 @@ function validateAdminPatch(payload) {
   if ("direction" in payload && !["to_uwc", "from_uwc"].includes(payload.direction)) return "Direction is invalid";
   if ("area" in payload && !isText(payload.area)) return "Area is invalid";
   if ("schedule" in payload && !String(payload.schedule).split("|").filter(Boolean).every(isScheduleCell)) return "Schedule is invalid";
-  if ("nickname" in payload && !isValidNickname(payload.nickname)) return "Nickname is invalid";
+  if ("student_number" in payload && !isValidStudentNumber(payload.student_number)) return "Student number is invalid";
   if ("status" in payload && !["pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
 
   for (const field of fields) {
     payload[field] = String(payload[field] || "").trim();
   }
 
-  if ("nickname" in payload) payload.nickname = normalizeNickname(payload.nickname);
+  if ("student_number" in payload) payload.student_number = normalizeStudentNumber(payload.student_number);
   if ("area" in payload) payload.area = normalizeArea(payload.area);
 
   return "";
@@ -286,15 +290,14 @@ function isText(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function normalizeNickname(value) {
+function normalizeStudentNumber(value) {
   return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .slice(0, 16);
+    .replace(/\D/g, "")
+    .slice(0, 12);
 }
 
-function isValidNickname(value) {
-  return /^[a-z0-9]{3,16}$/.test(normalizeNickname(value));
+function isValidStudentNumber(value) {
+  return /^\d{6,12}$/.test(normalizeStudentNumber(value));
 }
 
 function isScheduleCell(value) {
@@ -311,13 +314,18 @@ function submissionInterestKeys(submission) {
   return scheduleCells(submission).map((schedule) => interestKey({ ...submission, schedule }));
 }
 
-function interestKey({ direction, area, schedule, nickname }) {
+function interestKey({ direction, area, schedule, student_number }) {
   return [
     direction,
     normalizeArea(area).toLowerCase(),
     schedule,
-    normalizeNickname(nickname)
+    identityKey(student_number)
   ].join("|");
+}
+
+function identityKey(value) {
+  const text = String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return /^\d+$/.test(text) ? normalizeStudentNumber(text) : text;
 }
 
 function createSubmissionId() {
@@ -334,7 +342,12 @@ async function readSubmissions() {
     .filter(Boolean)
     .map((line) => {
       const values = parseCsvLine(line);
-      return Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
+      const submission = Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
+      if (!submission.student_number && submission.nickname) {
+        submission.student_number = submission.nickname;
+      }
+      delete submission.nickname;
+      return submission;
     });
 }
 

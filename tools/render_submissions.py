@@ -22,7 +22,7 @@ FIELDS = [
     "direction",
     "area",
     "schedule",
-    "nickname",
+    "student_number",
     "status",
     "matched_group_id",
 ]
@@ -54,7 +54,7 @@ def main() -> int:
     subparsers.add_parser("json", help="Print raw JSON.")
     dedupe_parser = subparsers.add_parser(
         "dedupe",
-        help="Remove duplicate nickname/route/time interests from existing rows.",
+        help="Remove duplicate student-number/route/time interests from existing rows.",
     )
     dedupe_parser.add_argument(
         "--apply",
@@ -70,7 +70,7 @@ def main() -> int:
     patch_parser.add_argument("--direction", choices=["to_uwc", "from_uwc"])
     patch_parser.add_argument("--area")
     patch_parser.add_argument("--schedule", help="Example: mon@07:00|wed@08:30")
-    patch_parser.add_argument("--nickname")
+    patch_parser.add_argument("--student-number")
     patch_parser.add_argument(
         "--status",
         choices=["pending", "matched", "deleted", "archived"],
@@ -192,10 +192,12 @@ class AdminClient:
 
 def build_patch(args: argparse.Namespace) -> dict[str, str]:
     patch = {}
-    for field in ["direction", "area", "schedule", "nickname", "status"]:
+    for field in ["direction", "area", "schedule", "status"]:
         value = getattr(args, field)
         if value is not None:
             patch[field] = value
+    if args.student_number is not None:
+        patch["student_number"] = "".join(char for char in args.student_number if char.isdigit())[:12]
     if args.matched_group_id is not None:
         patch["matched_group_id"] = args.matched_group_id
     return patch
@@ -257,6 +259,8 @@ def print_table(rows: list[dict[str, str]]) -> None:
         print("No submissions.")
         return
 
+    rows = [normalize_submission(row) for row in rows]
+
     widths = {
         field: min(
             max(len(field), *(len(display(row.get(field, ""))) for row in rows)),
@@ -281,6 +285,7 @@ def suggest_matches(
     submissions: list[dict[str, str]],
     min_size: int = 2,
 ) -> list[dict[str, object]]:
+    submissions = [normalize_submission(submission) for submission in submissions]
     pending = [
         submission
         for submission in submissions
@@ -382,12 +387,19 @@ def schedule_cells(row: dict[str, str]) -> set[str]:
 
 
 def interest_key(row: dict[str, str], schedule: str) -> tuple[str, str, str, str]:
+    row = normalize_submission(row)
     return (
         row.get("direction", ""),
         normalize_area_key(row.get("area", "")),
         schedule,
-        row.get("nickname", "").lower(),
+        row.get("student_number", ""),
     )
+
+
+def normalize_submission(row: dict[str, str]) -> dict[str, str]:
+    if row.get("student_number"):
+        return row
+    return {**row, "student_number": row.get("nickname", "")}
 
 
 def collect_component(start_id: str, neighbors: dict[str, set[str]]) -> set[str]:
