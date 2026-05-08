@@ -57,7 +57,7 @@ python3 tools/render_submissions.py delete sub_abc123
 ```
 
 New submissions are stored as one interest row per selected day/time cell. If a
-4-digit code submits the same direction, suburb, and day/time again, the
+student number submits the same direction, suburb, and day/time again, the
 duplicate interest is skipped instead of counted twice.
 
 Suggested matches are pending entries with the same direction, the same suburb,
@@ -78,26 +78,27 @@ The admin endpoints return 404 until `ADMIN_TOKEN` is configured.
 - Travelling to UWC or from UWC
 - Starting suburb from an alphabetic list
 - Travel schedule as exact day/time selections
-- Random 4-digit code, used to group route/time pool interest
+- Student number, used to group route/time pool interest
 - Popular route and time counts from captured submissions
 
 ## Privacy Handling
 
-A random 4-digit code is collected initially only to determine who falls into
-common route/time pools. Users are told not to use their student number or
-another personal identifier as the code. Codes must not be shared with other
-people in a pool without explicit consent at a later stage.
+Student numbers are collected initially only to determine who falls into common
+route/time pools. Student numbers, or student email addresses derived from them,
+must not be shared with other people in a pool without explicit consent at a
+later stage.
 
 Before submission, users must tick an explicit consent checkbox confirming this
-limited purpose. Providing a code is voluntary, but it is required to join route
-pools and prevent duplicate entries.
+limited purpose. Providing a student number is voluntary, but it is required to
+join route pools and prevent duplicate entries.
 
-Public pages show aggregate heatmap counts only. Raw codes are available only
-through the token-protected admin tool. Route-interest records
+Public pages show aggregate heatmap counts only. Raw student numbers are
+available only through the token-protected admin tool. Route-interest records
 should be deleted when they are no longer needed for the commute-club project.
 Students can also remove their own route-interest records from the public form
-by entering their code and using the remove button. This deletes the code and
-all linked route-pool entries from the active database. The app does not keep
-extra copies that continue storing a code after that removal.
+by entering their student number and using the remove button. This deletes the
+student number and all linked route-pool entries from the active database. The
+app does not keep extra copies that continue storing a student number after that
+removal.
 
 Submissions are kept with a `status` field. Future matching can mark records as `matched` with a `matched_group_id`, which keeps an audit trail while preventing already-connected people from being matched again.

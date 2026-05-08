@@ -17,7 +17,7 @@ const csvHeaders = [
   "direction",
   "area",
   "schedule",
-  "pilot_code",
+  "student_number",
   "status",
   "matched_group_id",
 ];
@@ -42,8 +42,8 @@ createServer(async (request, response) => {
       return;
     }
 
-    if (request.method === "POST" && ["/api/remove-pilot-code", "/api/remove-student-number"].includes(url.pathname)) {
-      await handleRemovePilotCode(request, response);
+    if (request.method === "POST" && url.pathname === "/api/remove-student-number") {
+      await handleRemoveStudentNumber(request, response);
       return;
     }
 
@@ -105,7 +105,7 @@ async function handleSubmission(request, response) {
   }
 
   const submissions = await readSubmissions();
-  const pilotCode = normalizePilotCode(getSubmittedPilotCode(payload));
+  const studentNumber = normalizeStudentNumber(payload.studentNumber);
   const area = normalizeArea(payload.area);
   const existingKeys = new Set(submissions.flatMap(submissionInterestKeys));
   const submittedAt = new Date().toISOString();
@@ -114,7 +114,7 @@ async function handleSubmission(request, response) {
       direction: payload.direction,
       area,
       schedule,
-      pilot_code: pilotCode
+      student_number: studentNumber
     })))
     .map((schedule) => [
       createSubmissionId(),
@@ -122,7 +122,7 @@ async function handleSubmission(request, response) {
       payload.direction,
       area,
       schedule,
-      pilotCode,
+      studentNumber,
       "pending",
       ""
     ].map(csvCell).join(","));
@@ -144,23 +144,22 @@ function validateSubmission(payload) {
   if (!isText(payload.area)) return "Choose or enter a starting area";
   if (!Array.isArray(payload.schedule) || payload.schedule.length === 0) return "Choose at least one day and time";
   if (!payload.schedule.every(isScheduleCell)) return "One of the selected schedule times is invalid";
-  if (!isValidPilotCode(getSubmittedPilotCode(payload))) return "Use a valid 4-digit code";
-  if (payload.privacyConsent !== true) return "Consent is required to collect your 4-digit code";
+  if (!isValidStudentNumber(payload.studentNumber)) return "Use a valid 7-digit student number";
+  if (payload.privacyConsent !== true) return "Consent is required to collect your student number";
   return "";
 }
 
-async function handleRemovePilotCode(request, response) {
+async function handleRemoveStudentNumber(request, response) {
   const payload = await readRequestJson(request);
-  const submittedCode = getSubmittedPilotCode(payload);
 
-  if (!isValidPilotCode(submittedCode)) {
-    sendJson(response, 400, { error: "Use a valid 4-digit code" });
+  if (!isValidStudentNumber(payload.studentNumber)) {
+    sendJson(response, 400, { error: "Use a valid 7-digit student number" });
     return;
   }
 
-  const pilotCode = normalizePilotCode(submittedCode);
+  const studentNumber = normalizeStudentNumber(payload.studentNumber);
   const submissions = await readSubmissions();
-  const nextSubmissions = submissions.filter((submission) => identityKey(submission.pilot_code) !== pilotCode);
+  const nextSubmissions = submissions.filter((submission) => identityKey(submission.student_number) !== studentNumber);
   const deleted = submissions.length - nextSubmissions.length;
 
   if (deleted > 0) {
@@ -178,8 +177,8 @@ async function handlePopularRoutes(response) {
 
   for (const submission of submissions) {
     const area = normalizeArea(submission.area);
-    if (!["deleted", "archived"].includes(submission.status) && identityKey(submission.pilot_code)) {
-      uniqueUsers.add(identityKey(submission.pilot_code));
+    if (!["deleted", "archived"].includes(submission.status) && identityKey(submission.student_number)) {
+      uniqueUsers.add(identityKey(submission.student_number));
     }
 
     if (submission.status && submission.status !== "pending") continue;
@@ -292,12 +291,7 @@ function authorizeAdmin(request, response) {
 function validateAdminPatch(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "Patch body must be an object";
 
-  if ("student_number" in payload && !("pilot_code" in payload)) {
-    payload.pilot_code = payload.student_number;
-    delete payload.student_number;
-  }
-
-  const allowedFields = new Set(["direction", "area", "schedule", "pilot_code", "status", "matched_group_id"]);
+  const allowedFields = new Set(["direction", "area", "schedule", "student_number", "status", "matched_group_id"]);
   const fields = Object.keys(payload);
   if (fields.length === 0) return "Patch body is empty";
   if (!fields.every((field) => allowedFields.has(field))) return "Patch contains an unsupported field";
@@ -305,14 +299,14 @@ function validateAdminPatch(payload) {
   if ("direction" in payload && !["to_uwc", "from_uwc"].includes(payload.direction)) return "Direction is invalid";
   if ("area" in payload && !isText(payload.area)) return "Area is invalid";
   if ("schedule" in payload && !String(payload.schedule).split("|").filter(Boolean).every(isScheduleCell)) return "Schedule is invalid";
-  if ("pilot_code" in payload && !isValidPilotCode(payload.pilot_code)) return "Pilot code is invalid";
+  if ("student_number" in payload && !isValidStudentNumber(payload.student_number)) return "Student number is invalid";
   if ("status" in payload && !["pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
 
   for (const field of fields) {
     payload[field] = String(payload[field] || "").trim();
   }
 
-  if ("pilot_code" in payload) payload.pilot_code = normalizePilotCode(payload.pilot_code);
+  if ("student_number" in payload) payload.student_number = normalizeStudentNumber(payload.student_number);
   if ("area" in payload) payload.area = normalizeArea(payload.area);
 
   return "";
@@ -322,18 +316,14 @@ function isText(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function getSubmittedPilotCode(payload) {
-  return payload?.pilotCode ?? payload?.studentNumber ?? "";
-}
-
-function normalizePilotCode(value) {
+function normalizeStudentNumber(value) {
   return String(value || "")
     .replace(/\D/g, "")
-    .slice(0, 4);
+    .slice(0, 7);
 }
 
-function isValidPilotCode(value) {
-  return /^\d{4}$/.test(String(value || "").replace(/\D/g, ""));
+function isValidStudentNumber(value) {
+  return /^\d{7}$/.test(String(value || "").replace(/\D/g, ""));
 }
 
 function isScheduleCell(value) {
@@ -350,18 +340,18 @@ function submissionInterestKeys(submission) {
   return scheduleCells(submission).map((schedule) => interestKey({ ...submission, schedule }));
 }
 
-function interestKey({ direction, area, schedule, pilot_code }) {
+function interestKey({ direction, area, schedule, student_number }) {
   return [
     direction,
     normalizeArea(area).toLowerCase(),
     schedule,
-    identityKey(pilot_code)
+    identityKey(student_number)
   ].join("|");
 }
 
 function identityKey(value) {
   const text = String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  return /^\d+$/.test(text) ? text : text;
+  return /^\d+$/.test(text) ? normalizeStudentNumber(text) : text;
 }
 
 function createSubmissionId() {
@@ -379,10 +369,9 @@ async function readSubmissions() {
     .map((line) => {
       const values = parseCsvLine(line);
       const submission = Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
-      if (!submission.pilot_code) {
-        submission.pilot_code = submission.student_number || submission.nickname || "";
+      if (!submission.student_number && submission.nickname) {
+        submission.student_number = submission.nickname;
       }
-      delete submission.student_number;
       delete submission.nickname;
       return submission;
     });
