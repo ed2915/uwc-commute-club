@@ -42,6 +42,11 @@ createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/api/remove-student-number") {
+      await handleRemoveStudentNumber(request, response);
+      return;
+    }
+
     if (request.method === "GET" && url.pathname === "/api/popular-routes") {
       await handlePopularRoutes(response);
       return;
@@ -142,6 +147,26 @@ function validateSubmission(payload) {
   if (!isValidStudentNumber(payload.studentNumber)) return "Use a valid 7-digit student number";
   if (payload.privacyConsent !== true) return "Consent is required to collect your student number";
   return "";
+}
+
+async function handleRemoveStudentNumber(request, response) {
+  const payload = await readRequestJson(request);
+
+  if (!isValidStudentNumber(payload.studentNumber)) {
+    sendJson(response, 400, { error: "Use a valid 7-digit student number" });
+    return;
+  }
+
+  const studentNumber = normalizeStudentNumber(payload.studentNumber);
+  const submissions = await readSubmissions();
+  const nextSubmissions = submissions.filter((submission) => identityKey(submission.student_number) !== studentNumber);
+  const deleted = submissions.length - nextSubmissions.length;
+
+  if (deleted > 0) {
+    await writeSubmissions(nextSubmissions);
+  }
+
+  sendJson(response, 200, { ok: true, deleted });
 }
 
 async function handlePopularRoutes(response) {

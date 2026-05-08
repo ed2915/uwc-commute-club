@@ -37,6 +37,7 @@ const toUwcRoutes = document.querySelector("#toUwcRoutes");
 const fromUwcRoutes = document.querySelector("#fromUwcRoutes");
 const uniqueUserCount = document.querySelector("#uniqueUserCount");
 const studentNumberInput = form.elements.studentNumber;
+const removeStudentNumberButton = document.querySelector("#removeStudentNumber");
 const selectedHeatmapDays = {
   to_uwc: "mon",
   from_uwc: "mon"
@@ -110,6 +111,43 @@ form.addEventListener("submit", async (event) => {
     setStatus(error.message, "error");
   } finally {
     button.disabled = false;
+  }
+});
+
+removeStudentNumberButton.addEventListener("click", async () => {
+  setStatus("", "");
+
+  const studentNumber = normalizeStudentNumber(studentNumberInput.value);
+  if (!isValidStudentNumber(studentNumber)) {
+    setStatus("Enter your 7-digit student number before removing it.", "error");
+    return;
+  }
+
+  removeStudentNumberButton.disabled = true;
+
+  try {
+    const response = await fetch("/api/remove-student-number", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentNumber })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Could not remove your student number");
+    }
+
+    if (result.deleted > 0) {
+      form.reset();
+      setStatus(`Removed ${result.deleted} route-pool entries linked to that student number.`, "success");
+      loadPopularRoutes();
+    } else {
+      setStatus("No route-pool entries were found for that student number.", "success");
+    }
+  } catch (error) {
+    setStatus(error.message, "error");
+  } finally {
+    removeStudentNumberButton.disabled = false;
   }
 });
 

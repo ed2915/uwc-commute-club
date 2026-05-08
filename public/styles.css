@@ -360,6 +360,18 @@ button:disabled {
   opacity: 0.7;
 }
 
+.form-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.secondary-action {
+  border: 1px solid var(--warn);
+  background: #fff;
+  color: var(--warn);
+}
+
 .status[data-tone="success"] {
   color: var(--accent-dark);
   font-weight: 700;
@@ -509,6 +521,7 @@ button:disabled {
 
   .field-grid,
   .segmented,
+  .form-actions,
   .routes-heading {
     grid-template-columns: 1fr;
   }

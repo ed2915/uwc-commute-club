@@ -95,5 +95,7 @@ join route pools and prevent duplicate entries.
 Public pages show aggregate heatmap counts only. Raw student numbers are
 available only through the token-protected admin tool. Route-interest records
 should be deleted when they are no longer needed for the commute-club project.
+Students can also remove their own route-interest records from the public form
+by entering their student number and using the remove button.
 
 Submissions are kept with a `status` field. Future matching can mark records as `matched` with a `matched_group_id`, which keeps an audit trail while preventing already-connected people from being matched again.
