@@ -179,7 +179,7 @@ function renderRouteHeatmap(container, routes, direction) {
   }).join("");
   const grid = visibleRoutes.length === 0 ? `<p class="empty-routes">No routes for ${escapeHtml(formatDay(selectedDay))} yet.</p>` : `
     <div class="heatmap-wrap">
-      <div class="heatmap-grid" style="grid-template-columns: minmax(128px, 1.2fr) repeat(${schedules.length}, minmax(44px, 1fr));">
+      <div class="heatmap-grid" style="grid-template-columns: minmax(116px, 1fr) repeat(${schedules.length}, 24px);">
         <div class="heatmap-corner">Suburb</div>
         ${headerCells}
         ${rows}

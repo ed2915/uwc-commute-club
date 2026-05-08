@@ -368,11 +368,11 @@ button:disabled {
 .heatmap-suburb,
 .heatmap-cell {
   display: grid;
-  min-height: 42px;
+  min-height: 34px;
   place-items: center;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  padding: 7px;
+  padding: 4px;
   text-align: center;
 }
 
@@ -385,8 +385,8 @@ button:disabled {
 }
 
 .heatmap-head {
-  min-height: 66px;
-  padding: 5px 3px;
+  min-height: 58px;
+  padding: 4px 1px;
 }
 
 .heatmap-head span {
@@ -402,6 +402,7 @@ button:disabled {
 
 .heatmap-cell {
   color: var(--ink);
+  font-size: 0.85rem;
   font-weight: 800;
 }
 
@@ -503,6 +504,6 @@ button:disabled {
   .heatmap-head,
   .heatmap-suburb,
   .heatmap-cell {
-    padding: 5px;
+    padding: 3px;
   }
 }
