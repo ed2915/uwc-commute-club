@@ -197,7 +197,7 @@ def build_patch(args: argparse.Namespace) -> dict[str, str]:
         if value is not None:
             patch[field] = value
     if args.student_number is not None:
-        patch["student_number"] = "".join(char for char in args.student_number if char.isdigit())[:12]
+        patch["student_number"] = "".join(char for char in args.student_number if char.isdigit())
     if args.matched_group_id is not None:
         patch["matched_group_id"] = args.matched_group_id
     return patch

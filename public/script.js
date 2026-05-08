@@ -22,7 +22,11 @@ const timeSlots = [
   "14:30",
   "15:30",
   "16:30",
-  "17:30"
+  "17:30",
+  "18:00",
+  "18:30",
+  "19:00",
+  "19:30"
 ];
 
 const form = document.querySelector("#tripForm");
@@ -63,7 +67,7 @@ form.addEventListener("submit", async (event) => {
   };
 
   if (!isValidStudentNumber(payload.studentNumber)) {
-    setStatus("Use a valid student number with 6-12 digits.", "error");
+    setStatus("Use a valid 7-digit student number.", "error");
     return;
   }
 
@@ -246,11 +250,11 @@ function clean(value) {
 function normalizeStudentNumber(value) {
   return String(value || "")
     .replace(/\D/g, "")
-    .slice(0, 12);
+    .slice(0, 7);
 }
 
 function isValidStudentNumber(value) {
-  return /^\d{6,12}$/.test(value);
+  return /^\d{7}$/.test(value);
 }
 
 function escapeHtml(value) {

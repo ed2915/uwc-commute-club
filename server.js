@@ -139,7 +139,7 @@ function validateSubmission(payload) {
   if (!isText(payload.area)) return "Choose or enter a starting area";
   if (!Array.isArray(payload.schedule) || payload.schedule.length === 0) return "Choose at least one day and time";
   if (!payload.schedule.every(isScheduleCell)) return "One of the selected schedule times is invalid";
-  if (!isValidStudentNumber(payload.studentNumber)) return "Use a valid student number with 6-12 digits";
+  if (!isValidStudentNumber(payload.studentNumber)) return "Use a valid 7-digit student number";
   return "";
 }
 
@@ -293,11 +293,11 @@ function isText(value) {
 function normalizeStudentNumber(value) {
   return String(value || "")
     .replace(/\D/g, "")
-    .slice(0, 12);
+    .slice(0, 7);
 }
 
 function isValidStudentNumber(value) {
-  return /^\d{6,12}$/.test(normalizeStudentNumber(value));
+  return /^\d{7}$/.test(String(value || "").replace(/\D/g, ""));
 }
 
 function isScheduleCell(value) {
