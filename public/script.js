@@ -30,13 +30,16 @@ const timeSlots = [
 ];
 
 const form = document.querySelector("#tripForm");
+const connectForm = document.querySelector("#connectForm");
 const statusMessage = document.querySelector("#status");
+const connectStatusMessage = document.querySelector("#connectStatus");
 const scheduleGrid = document.querySelector("#scheduleGrid");
 const suburbLabel = document.querySelector("#suburbLabel");
 const toUwcRoutes = document.querySelector("#toUwcRoutes");
 const fromUwcRoutes = document.querySelector("#fromUwcRoutes");
 const uniqueUserCount = document.querySelector("#uniqueUserCount");
 const studentNumberInput = form.elements.studentNumber;
+const connectStudentNumberInput = connectForm.elements.connectStudentNumber;
 const removeStudentNumberButton = document.querySelector("#removeStudentNumber");
 const selectedHeatmapDays = {
   to_uwc: "mon",
@@ -44,6 +47,7 @@ const selectedHeatmapDays = {
 };
 
 renderScheduleGrid();
+populateConnectionFormOptions();
 loadPopularRoutes();
 updateSuburbLabel();
 
@@ -53,6 +57,10 @@ form.addEventListener("change", (event) => {
 
 studentNumberInput.addEventListener("input", () => {
   studentNumberInput.value = normalizeStudentNumber(studentNumberInput.value);
+});
+
+connectStudentNumberInput.addEventListener("input", () => {
+  connectStudentNumberInput.value = normalizeStudentNumber(connectStudentNumberInput.value);
 });
 
 form.addEventListener("submit", async (event) => {
@@ -109,6 +117,59 @@ form.addEventListener("submit", async (event) => {
     loadPopularRoutes();
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    button.disabled = false;
+  }
+});
+
+connectForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  setConnectStatus("", "");
+
+  const formData = new FormData(connectForm);
+  const payload = {
+    studentNumber: normalizeStudentNumber(formData.get("connectStudentNumber")),
+    direction: formData.get("connectDirection"),
+    area: clean(formData.get("connectArea")),
+    schedule: formData.get("connectSchedule"),
+    memberLabels: parseMemberLabels(formData.get("memberLabels")),
+    connectionConsent: formData.get("connectionConsent") === "yes"
+  };
+
+  if (!isValidStudentNumber(payload.studentNumber)) {
+    setConnectStatus("Use a valid 7-digit student number.", "error");
+    return;
+  }
+
+  if (payload.memberLabels.length === 0) {
+    setConnectStatus("Enter at least one group number.", "error");
+    return;
+  }
+
+  if (!payload.connectionConsent) {
+    setConnectStatus("Please consent before requesting a connection.", "error");
+    return;
+  }
+
+  const button = connectForm.querySelector("button");
+  button.disabled = true;
+
+  try {
+    const response = await fetch("/api/connection-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Could not save your connection request");
+    }
+
+    connectForm.reset();
+    setConnectStatus(`Saved your request for ${result.requested} group number${result.requested === 1 ? "" : "s"}.`, "success");
+  } catch (error) {
+    setConnectStatus(error.message, "error");
   } finally {
     button.disabled = false;
   }
@@ -209,6 +270,7 @@ function renderRouteHeatmap(container, routes, direction) {
   const visibleRoutes = routes.filter((route) => getScheduleDay(route.schedule) === selectedDay);
   const suburbs = [...new Set(visibleRoutes.map((route) => route.area))].sort((a, b) => a.localeCompare(b));
   const schedules = timeSlots.map((time) => `${selectedDay}@${time}`);
+  const routesByCell = new Map(visibleRoutes.map((route) => [`${route.area}|${route.schedule}`, route]));
   const counts = new Map(visibleRoutes.map((route) => [`${route.area}|${route.schedule}`, route.interested]));
   const maxInterest = Math.max(...routes.map((route) => route.interested), 1);
   const headerCells = schedules.map((schedule) => `<div class="heatmap-head"><span>${escapeHtml(formatScheduleTime(schedule))}</span></div>`).join("");
@@ -216,8 +278,13 @@ function renderRouteHeatmap(container, routes, direction) {
     const cells = schedules.map((schedule) => {
       const count = counts.get(`${suburb}|${schedule}`) || 0;
       const level = count === 0 ? 0 : Math.max(1, Math.ceil((count / maxInterest) * 5));
+      const route = routesByCell.get(`${suburb}|${schedule}`);
 
-      return `<div class="heatmap-cell heatmap-level-${level}" aria-label="${escapeHtml(suburb)}, ${escapeHtml(formatSchedule(schedule))}: ${count} interested">${count || ""}</div>`;
+      if (!route) {
+        return `<div class="heatmap-cell heatmap-level-0" aria-label="${escapeHtml(suburb)}, ${escapeHtml(formatSchedule(schedule))}: no interests"></div>`;
+      }
+
+      return `<button class="heatmap-cell heatmap-level-${level}" type="button" data-direction="${direction}" data-area="${escapeHtml(suburb)}" data-schedule="${escapeHtml(schedule)}" aria-label="${escapeHtml(suburb)}, ${escapeHtml(formatSchedule(schedule))}: ${count} interested">${count}</button>`;
     }).join("");
 
     return `
@@ -237,7 +304,8 @@ function renderRouteHeatmap(container, routes, direction) {
 
   container.innerHTML = `
     ${grid}
-    <div class="day-tabs" role="tablist" aria-label="${direction === "to_uwc" ? "To UWC" : "From UWC"} heatmap day">
+    <div class="route-popup" hidden></div>
+    <div class="day-tabs" role="tablist" aria-label="${direction === "to_uwc" ? "To UWC" : "From UWC"} route table day">
       ${days.map(([day, label]) => `
         <button class="day-tab" type="button" data-direction="${direction}" data-day="${day}" aria-selected="${day === selectedDay}">
           ${label}
@@ -252,6 +320,49 @@ function renderRouteHeatmap(container, routes, direction) {
       renderRouteHeatmap(container, routes, direction);
     });
   });
+
+  container.querySelectorAll(".heatmap-cell[data-schedule]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const route = routesByCell.get(`${button.dataset.area}|${button.dataset.schedule}`);
+      showRouteGroup(container, route);
+    });
+  });
+}
+
+function showRouteGroup(container, route) {
+  if (!route) return;
+
+  const popup = container.querySelector(".route-popup");
+  const labels = (route.members || []).map((member) => `#${member.label}`).join(", ");
+  popup.hidden = false;
+  popup.innerHTML = `
+    <div>
+      <strong>${escapeHtml(route.direction === "to_uwc" ? `${route.area} to UWC` : `UWC to ${route.area}`)}</strong>
+      <span>${escapeHtml(formatSchedule(route.schedule))}</span>
+    </div>
+    <p>Group numbers: ${escapeHtml(labels || "none")}</p>
+    <button class="secondary-action use-group" type="button">Use this group</button>
+  `;
+
+  popup.querySelector(".use-group").addEventListener("click", () => {
+    connectForm.elements.connectDirection.value = route.direction;
+    connectForm.elements.connectArea.value = route.area;
+    connectForm.elements.connectSchedule.value = route.schedule;
+    connectForm.elements.memberLabels.value = (route.members || []).map((member) => member.label).join(", ");
+    connectForm.scrollIntoView({ behavior: "smooth", block: "start" });
+    setConnectStatus("Group copied. Remove any numbers you do not want to request contact with.", "success");
+  });
+}
+
+function populateConnectionFormOptions() {
+  const sourceOptions = [...form.elements.area.options]
+    .filter((option) => option.value)
+    .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.textContent)}</option>`)
+    .join("");
+  connectForm.elements.connectArea.innerHTML = `<option value="">Choose a suburb</option>${sourceOptions}`;
+  connectForm.elements.connectSchedule.innerHTML = days
+    .flatMap(([day, label]) => timeSlots.map((time) => `<option value="${day}@${time}">${label} ${time}</option>`))
+    .join("");
 }
 
 function updateSuburbLabel() {
@@ -291,6 +402,13 @@ function clean(value) {
   return String(value || "").trim();
 }
 
+function parseMemberLabels(value) {
+  return [...new Set(String(value || "")
+    .split(/[\s,;#]+/)
+    .map((item) => Number(item.replace(/\D/g, "")))
+    .filter((item) => Number.isInteger(item) && item > 0))];
+}
+
 function normalizeStudentNumber(value) {
   return String(value || "")
     .replace(/\D/g, "")
@@ -313,4 +431,9 @@ function escapeHtml(value) {
 function setStatus(message, tone) {
   statusMessage.textContent = message;
   statusMessage.dataset.tone = tone;
+}
+
+function setConnectStatus(message, tone) {
+  connectStatusMessage.textContent = message;
+  connectStatusMessage.dataset.tone = tone;
 }

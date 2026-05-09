@@ -7,6 +7,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(__dirname, "public");
 const dataDir = process.env.DATA_DIR || join(__dirname, "data");
 const submissionsFile = join(dataDir, "submissions.csv");
+const connectionRequestsFile = join(dataDir, "connection_requests.csv");
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || (process.env.RENDER ? "0.0.0.0" : "127.0.0.1");
 const adminToken = process.env.ADMIN_TOKEN || "";
@@ -22,6 +23,19 @@ const csvHeaders = [
   "matched_group_id",
 ];
 
+const connectionRequestHeaders = [
+  "id",
+  "requested_at",
+  "student_number",
+  "direction",
+  "area",
+  "schedule",
+  "requested_member_labels",
+  "requested_submission_ids",
+  "status",
+  "notes",
+];
+
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -32,6 +46,7 @@ const contentTypes = {
 
 await mkdir(dataDir, { recursive: true });
 await ensureCsvFile();
+await ensureConnectionRequestsFile();
 
 createServer(async (request, response) => {
   try {
@@ -47,6 +62,11 @@ createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/api/connection-requests") {
+      await handleConnectionRequest(request, response);
+      return;
+    }
+
     if (request.method === "GET" && url.pathname === "/api/popular-routes") {
       await handlePopularRoutes(response);
       return;
@@ -54,6 +74,11 @@ createServer(async (request, response) => {
 
     if (url.pathname === "/api/admin/submissions") {
       await handleAdminSubmissions(request, response);
+      return;
+    }
+
+    if (url.pathname === "/api/admin/connection-requests") {
+      await handleAdminConnectionRequests(request, response);
       return;
     }
 
@@ -93,6 +118,14 @@ async function ensureCsvFile() {
 
   const submissions = await readSubmissions();
   await writeSubmissions(submissions);
+}
+
+async function ensureConnectionRequestsFile() {
+  try {
+    await stat(connectionRequestsFile);
+  } catch {
+    await appendFile(connectionRequestsFile, `${connectionRequestHeaders.join(",")}\n`);
+  }
 }
 
 async function handleSubmission(request, response) {
@@ -169,19 +202,78 @@ async function handleRemoveStudentNumber(request, response) {
   sendJson(response, 200, { ok: true, deleted });
 }
 
+async function handleConnectionRequest(request, response) {
+  const payload = await readRequestJson(request);
+  const validationError = validateConnectionRequest(payload);
+
+  if (validationError) {
+    sendJson(response, 400, { error: validationError });
+    return;
+  }
+
+  const studentNumber = normalizeStudentNumber(payload.studentNumber);
+  const area = normalizeArea(payload.area);
+  const labels = normalizeMemberLabels(payload.memberLabels);
+  const submissions = await readSubmissions();
+  const group = routeGroupMembers(submissions, payload.direction, area, payload.schedule);
+  const requesterIsInGroup = group.some((member) => identityKey(member.student_number) === studentNumber);
+
+  if (!requesterIsInGroup) {
+    sendJson(response, 400, { error: "Your student number must already be in that exact route/time group before you can request a connection." });
+    return;
+  }
+
+  const selectedMembers = labels
+    .map((label) => group.find((member) => member.label === label))
+    .filter(Boolean)
+    .filter((member) => identityKey(member.student_number) !== studentNumber);
+
+  if (selectedMembers.length === 0) {
+    sendJson(response, 400, { error: "Choose at least one other group number." });
+    return;
+  }
+
+  const missingLabels = labels.some((label) => !group.find((member) => member.label === label));
+  if (missingLabels) {
+    sendJson(response, 400, { error: "One or more selected group numbers are not in that route/time group." });
+    return;
+  }
+
+  const row = [
+    createConnectionRequestId(),
+    new Date().toISOString(),
+    studentNumber,
+    payload.direction,
+    area,
+    payload.schedule,
+    labels.join("|"),
+    selectedMembers.map((member) => member.submissionId).join("|"),
+    "pending",
+    ""
+  ].map(csvCell).join(",");
+
+  await appendFile(connectionRequestsFile, `${row}\n`);
+  sendJson(response, 201, { ok: true, requested: selectedMembers.length });
+}
+
+function validateConnectionRequest(payload) {
+  if (!payload || typeof payload !== "object") return "Connection request is missing";
+  if (!isValidStudentNumber(payload.studentNumber)) return "Use a valid 7-digit student number";
+  if (!["to_uwc", "from_uwc"].includes(payload.direction)) return "Choose a travel direction";
+  if (!isText(payload.area)) return "Choose a suburb";
+  if (!isScheduleCell(payload.schedule)) return "Choose a valid day and time";
+  if (normalizeMemberLabels(payload.memberLabels).length === 0) return "Enter at least one group number";
+  if (payload.connectionConsent !== true) return "Consent is required before requesting a connection";
+  return "";
+}
+
 async function handlePopularRoutes(response) {
   const submissions = await readSubmissions();
   const routeMap = new Map();
   const countedKeys = new Set();
-  const uniqueUsers = new Set();
 
   for (const submission of submissions) {
     const area = normalizeArea(submission.area);
-    const submissionIdentity = submissionIdentityKey(submission);
-    if (!["deleted", "archived"].includes(submission.status) && submissionIdentity) {
-      uniqueUsers.add(submissionIdentity);
-    }
-
     if (submission.status && submission.status !== "pending") continue;
     if (!area || !["to_uwc", "from_uwc"].includes(submission.direction)) continue;
 
@@ -197,10 +289,14 @@ async function handlePopularRoutes(response) {
         schedule,
         start: submission.direction === "to_uwc" ? area : "UWC",
         end: submission.direction === "to_uwc" ? "UWC" : area,
-        interested: 0
+        interested: 0,
+        members: []
       };
 
       route.interested += 1;
+      route.members.push({
+        label: route.members.length + 1
+      });
       routeMap.set(key, route);
     }
   }
@@ -208,7 +304,7 @@ async function handlePopularRoutes(response) {
   const routes = [...routeMap.values()]
     .sort((a, b) => b.interested - a.interested || a.start.localeCompare(b.start));
 
-  sendJson(response, 200, { routes, uniqueUsers: uniqueUsers.size });
+  sendJson(response, 200, { routes, uniqueUsers: countedKeys.size });
 }
 
 async function handleAdminSubmissions(request, response) {
@@ -221,6 +317,18 @@ async function handleAdminSubmissions(request, response) {
 
   const submissions = await readSubmissions();
   sendJson(response, 200, { submissions });
+}
+
+async function handleAdminConnectionRequests(request, response) {
+  if (!authorizeAdmin(request, response)) return;
+
+  if (request.method !== "GET") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const requests = await readConnectionRequests();
+  sendJson(response, 200, { requests });
 }
 
 async function handleAdminSubmission(request, response, pathname) {
@@ -331,6 +439,13 @@ function isScheduleCell(value) {
   return typeof value === "string" && /^(mon|tue|wed|thu|fri)@\d{2}:\d{2}$/.test(value);
 }
 
+function normalizeMemberLabels(value) {
+  const values = Array.isArray(value) ? value : String(value || "").split(/[\s,;#]+/);
+  return [...new Set(values
+    .map((item) => Number(String(item).replace(/\D/g, "")))
+    .filter((item) => Number.isInteger(item) && item > 0))];
+}
+
 function scheduleCells(submission) {
   return String(submission.schedule || "").split("|").filter(Boolean);
 }
@@ -339,6 +454,29 @@ function submissionInterestKeys(submission) {
   if (["deleted", "archived"].includes(submission.status)) return [];
 
   return scheduleCells(submission).map((schedule) => interestKey({ ...submission, schedule }));
+}
+
+function routeGroupMembers(submissions, direction, area, schedule) {
+  const members = [];
+  const seen = new Set();
+
+  for (const submission of submissions) {
+    if (submission.status && submission.status !== "pending") continue;
+    if (submission.direction !== direction) continue;
+    if (normalizeArea(submission.area).toLowerCase() !== normalizeArea(area).toLowerCase()) continue;
+    if (!scheduleCells(submission).includes(schedule)) continue;
+
+    const key = interestKey({ ...submission, area, schedule });
+    if (seen.has(key)) continue;
+    seen.add(key);
+    members.push({
+      label: members.length + 1,
+      submissionId: submission.id,
+      student_number: submission.student_number
+    });
+  }
+
+  return members;
 }
 
 function interestKey(submission) {
@@ -361,6 +499,10 @@ function identityKey(value) {
 
 function createSubmissionId() {
   return `sub_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createConnectionRequestId() {
+  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 async function readSubmissions() {
@@ -393,6 +535,20 @@ async function writeSubmissions(submissions) {
   const tempFile = `${submissionsFile}.tmp`;
   await writeFile(tempFile, `${lines.join("\n")}\n`);
   await rename(tempFile, submissionsFile);
+}
+
+async function readConnectionRequests() {
+  const csv = await readFile(connectionRequestsFile, "utf8");
+  const [headerLine, ...lines] = csv.trim().split("\n");
+  if (!headerLine) return [];
+
+  const headers = parseCsvLine(headerLine);
+  return lines
+    .filter(Boolean)
+    .map((line) => {
+      const values = parseCsvLine(line);
+      return Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
+    });
 }
 
 function parseCsvLine(line) {

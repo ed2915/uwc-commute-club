@@ -50,6 +50,7 @@ The Render CSV can be inspected and maintained with the local Python script:
 ```sh
 export UWC_ADMIN_TOKEN="use-the-same-value-as-render-admin-token"
 python3 tools/render_submissions.py list
+python3 tools/render_submissions.py requests
 python3 tools/render_submissions.py suggest-matches
 python3 tools/render_submissions.py dedupe
 python3 tools/render_submissions.py set sub_abc123 --status matched --matched-group-id group_1
@@ -80,6 +81,7 @@ The admin endpoints return 404 until `ADMIN_TOKEN` is configured.
 - Travel schedule as exact day/time selections
 - Student number, used to group route/time pool interest
 - Popular route and time counts from captured submissions
+- Connection requests for organiser review
 
 ## Privacy Handling
 
@@ -92,7 +94,7 @@ Before submission, users must tick an explicit consent checkbox confirming this
 limited purpose. Providing a student number is voluntary, but it is required to
 join route pools and prevent duplicate entries.
 
-Public pages show aggregate heatmap counts only. Raw student numbers are
+Public pages show aggregate route/time counts only. Raw student numbers are
 available only through the token-protected admin tool. Route-interest records
 should be deleted when they are no longer needed for the commute-club project.
 Students can also remove their own route-interest records from the public form
@@ -100,5 +102,11 @@ by entering their student number and using the remove button. This deletes the
 student number and all linked route-pool entries from the active database. The
 app does not keep extra copies that continue storing a student number after that
 removal.
+
+Students can also request contact with numbered entries in a specific route/time
+group. The server accepts a request only if that student number already appears
+in the same direction, suburb, and day/time group. These requests are stored in
+`connection_requests.csv` for organiser review and do not automatically share
+contact details.
 
 Submissions are kept with a `status` field. Future matching can mark records as `matched` with a `matched_group_id`, which keeps an audit trail while preventing already-connected people from being matched again.

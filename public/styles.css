@@ -69,7 +69,8 @@ h3 {
 }
 
 .trip-form,
-.popular-routes {
+.popular-routes,
+.connect-section {
   display: grid;
   gap: 18px;
   background: var(--surface);
@@ -79,8 +80,15 @@ h3 {
   box-shadow: 0 8px 28px rgb(23 32 27 / 0.08);
 }
 
-.popular-routes {
+.popular-routes,
+.connect-section,
+.trip-form {
   margin-top: 18px;
+}
+
+.connect-form {
+  display: grid;
+  gap: 18px;
 }
 
 .routes-heading {
@@ -455,6 +463,22 @@ button:disabled {
   font-weight: 800;
 }
 
+button.heatmap-cell {
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 4px;
+  cursor: pointer;
+}
+
+button.heatmap-cell:hover,
+button.heatmap-cell:focus-visible {
+  box-shadow: inset 0 0 0 3px var(--focus);
+}
+
 .heatmap-level-0 {
   background: #fff;
   color: transparent;
@@ -510,12 +534,49 @@ button:disabled {
   color: #fff;
 }
 
+.route-popup {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  padding: 12px;
+  background: #f8fbf9;
+}
+
+.route-popup[hidden] {
+  display: none;
+}
+
+.route-popup div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  justify-content: space-between;
+}
+
+.route-popup p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.route-popup .use-group {
+  width: auto;
+  min-height: 40px;
+  justify-self: start;
+  padding: 8px 12px;
+}
+
 @media (max-width: 680px) {
   .shell {
     padding-inline: 10px;
   }
 
-  .trip-form {
+  .trip-form,
+  .connect-section,
+  .popular-routes {
     padding: 12px;
   }
 

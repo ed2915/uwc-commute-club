@@ -27,6 +27,19 @@ FIELDS = [
     "matched_group_id",
 ]
 
+REQUEST_FIELDS = [
+    "id",
+    "requested_at",
+    "student_number",
+    "direction",
+    "area",
+    "schedule",
+    "requested_member_labels",
+    "requested_submission_ids",
+    "status",
+    "notes",
+]
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -51,6 +64,7 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("list", help="List all submissions.")
+    subparsers.add_parser("requests", help="List connection requests.")
     subparsers.add_parser("json", help="Print raw JSON.")
     dedupe_parser = subparsers.add_parser(
         "dedupe",
@@ -105,6 +119,9 @@ def main() -> int:
         if args.command == "list":
             submissions = client.list_submissions()
             print_table(submissions)
+        elif args.command == "requests":
+            requests = client.list_connection_requests()
+            print_table(requests, fields=REQUEST_FIELDS)
         elif args.command == "json":
             print(json.dumps(client.list_submissions(), indent=2))
         elif args.command == "delete":
@@ -151,6 +168,10 @@ class AdminClient:
     def list_submissions(self) -> list[dict[str, str]]:
         data = self.request("GET", "/api/admin/submissions")
         return data.get("submissions", [])
+
+    def list_connection_requests(self) -> list[dict[str, str]]:
+        data = self.request("GET", "/api/admin/connection-requests")
+        return data.get("requests", [])
 
     def delete_submission(self, submission_id: str) -> dict[str, str]:
         path = f"/api/admin/submissions/{quote(submission_id, safe='')}"
@@ -254,11 +275,12 @@ def apply_dedupe_plan(client: AdminClient, plan: dict[str, list[dict[str, str]]]
         print(f"Deleted {row['id']}")
 
 
-def print_table(rows: list[dict[str, str]]) -> None:
+def print_table(rows: list[dict[str, str]], fields: list[str] | None = None) -> None:
     if not rows:
         print("No submissions.")
         return
 
+    fields = fields or FIELDS
     rows = [normalize_submission(row) for row in rows]
 
     widths = {
@@ -266,15 +288,15 @@ def print_table(rows: list[dict[str, str]]) -> None:
             max(len(field), *(len(display(row.get(field, ""))) for row in rows)),
             40,
         )
-        for field in FIELDS
+        for field in fields
     }
 
-    header = "  ".join(field.ljust(widths[field]) for field in FIELDS)
+    header = "  ".join(field.ljust(widths[field]) for field in fields)
     print(header)
-    print("  ".join("-" * widths[field] for field in FIELDS))
+    print("  ".join("-" * widths[field] for field in fields))
 
     for row in rows:
-        print("  ".join(display(row.get(field, ""))[: widths[field]].ljust(widths[field]) for field in FIELDS))
+        print("  ".join(display(row.get(field, ""))[: widths[field]].ljust(widths[field]) for field in fields))
 
 
 def display(value: str) -> str:
