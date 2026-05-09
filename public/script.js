@@ -178,9 +178,22 @@ connectForm.addEventListener("submit", async (event) => {
 removeStudentNumberButton.addEventListener("click", async () => {
   setStatus("", "");
 
+  const formData = new FormData(form);
   const studentNumber = normalizeStudentNumber(studentNumberInput.value);
   if (!isValidStudentNumber(studentNumber)) {
-    setStatus("Enter your 7-digit student number before removing it.", "error");
+    setStatus("Enter your 7-digit student number before removing route/time interests.", "error");
+    return;
+  }
+
+  const payload = {
+    direction: formData.get("direction"),
+    area: clean(formData.get("area")),
+    schedule: formData.getAll("schedule"),
+    studentNumber
+  };
+
+  if (payload.schedule.length === 0) {
+    setStatus("Choose at least one day and time to remove.", "error");
     return;
   }
 
@@ -190,20 +203,20 @@ removeStudentNumberButton.addEventListener("click", async () => {
     const response = await fetch("/api/remove-student-number", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentNumber })
+      body: JSON.stringify(payload)
     });
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error(result.error || "Could not remove your student number");
+      throw new Error(result.error || "Could not remove those route/time interests");
     }
 
     if (result.deleted > 0) {
       form.reset();
-      setStatus(`Removed that student number from the database and deleted ${result.deleted} linked route-pool entries.`, "success");
+      setStatus(`Removed ${result.deleted} selected route/time interest${result.deleted === 1 ? "" : "s"} for that student number.`, "success");
       loadPopularRoutes();
     } else {
-      setStatus("No route-pool entries were found for that student number.", "success");
+      setStatus("No matching route/time interests were found for that student number.", "success");
     }
   } catch (error) {
     setStatus(error.message, "error");

@@ -191,9 +191,44 @@ async function handleRemoveStudentNumber(request, response) {
   }
 
   const studentNumber = normalizeStudentNumber(payload.studentNumber);
+  const direction = payload.direction;
+  const area = normalizeArea(payload.area);
+  const schedulesToRemove = new Set(Array.isArray(payload.schedule) ? payload.schedule : []);
+
+  if (!["to_uwc", "from_uwc"].includes(direction)) {
+    sendJson(response, 400, { error: "Choose a travel direction" });
+    return;
+  }
+
+  if (!area) {
+    sendJson(response, 400, { error: "Choose a suburb" });
+    return;
+  }
+
+  if (schedulesToRemove.size === 0 || ![...schedulesToRemove].every(isScheduleCell)) {
+    sendJson(response, 400, { error: "Choose at least one day and time to remove" });
+    return;
+  }
+
   const submissions = await readSubmissions();
-  const nextSubmissions = submissions.filter((submission) => identityKey(submission.student_number) !== studentNumber);
-  const deleted = submissions.length - nextSubmissions.length;
+  let deleted = 0;
+  const nextSubmissions = submissions
+    .map((submission) => {
+      const isTarget =
+        identityKey(submission.student_number) === studentNumber &&
+        submission.direction === direction &&
+        normalizeArea(submission.area).toLowerCase() === area.toLowerCase();
+
+      if (!isTarget) return submission;
+
+      const remainingSchedule = scheduleCells(submission)
+        .filter((schedule) => !schedulesToRemove.has(schedule));
+      const removedCount = scheduleCells(submission).length - remainingSchedule.length;
+      deleted += removedCount;
+
+      return { ...submission, schedule: remainingSchedule.join("|") };
+    })
+    .filter((submission) => scheduleCells(submission).length > 0);
 
   if (deleted > 0) {
     await writeSubmissions(nextSubmissions);
