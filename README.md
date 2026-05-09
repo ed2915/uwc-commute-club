@@ -103,10 +103,10 @@ day/time cells, and using the remove button. This deletes only those selected
 route/time interests from the active database. The app does not keep extra
 copies that continue storing a removed route/time interest after that removal.
 
-Students can also request contact with numbered entries in a specific route/time
+Students can also request contact with people already in a specific route/time
 group. The server accepts a request only if that student number already appears
-in the same direction, suburb, and day/time group. These requests are stored in
-`connection_requests.csv` for organiser review and do not automatically share
-contact details.
+in the same direction, suburb, and day/time group. The request stores the
+matching private row ids for organiser review in `connection_requests.csv` and
+does not automatically share contact details.
 
 Submissions are kept with a `status` field. Future matching can mark records as `matched` with a `matched_group_id`, which keeps an audit trail while preventing already-connected people from being matched again.

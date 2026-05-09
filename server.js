@@ -248,7 +248,6 @@ async function handleConnectionRequest(request, response) {
 
   const studentNumber = normalizeStudentNumber(payload.studentNumber);
   const area = normalizeArea(payload.area);
-  const labels = normalizeMemberLabels(payload.memberLabels);
   const submissions = await readSubmissions();
   const group = routeGroupMembers(submissions, payload.direction, area, payload.schedule);
   const requesterIsInGroup = group.some((member) => identityKey(member.student_number) === studentNumber);
@@ -258,19 +257,10 @@ async function handleConnectionRequest(request, response) {
     return;
   }
 
-  const selectedMembers = labels
-    .map((label) => group.find((member) => member.label === label))
-    .filter(Boolean)
-    .filter((member) => identityKey(member.student_number) !== studentNumber);
+  const targetMembers = group.filter((member) => identityKey(member.student_number) !== studentNumber);
 
-  if (selectedMembers.length === 0) {
-    sendJson(response, 400, { error: "Choose at least one other group number." });
-    return;
-  }
-
-  const missingLabels = labels.some((label) => !group.find((member) => member.label === label));
-  if (missingLabels) {
-    sendJson(response, 400, { error: "One or more selected group numbers are not in that route/time group." });
+  if (targetMembers.length === 0) {
+    sendJson(response, 400, { error: "There are no other people in that route/time group yet." });
     return;
   }
 
@@ -281,14 +271,14 @@ async function handleConnectionRequest(request, response) {
     payload.direction,
     area,
     payload.schedule,
-    labels.join("|"),
-    selectedMembers.map((member) => member.submissionId).join("|"),
+    "",
+    targetMembers.map((member) => member.submissionId).join("|"),
     "pending",
     ""
   ].map(csvCell).join(",");
 
   await appendFile(connectionRequestsFile, `${row}\n`);
-  sendJson(response, 201, { ok: true, requested: selectedMembers.length });
+  sendJson(response, 201, { ok: true, requested: targetMembers.length });
 }
 
 function validateConnectionRequest(payload) {
@@ -297,7 +287,6 @@ function validateConnectionRequest(payload) {
   if (!["to_uwc", "from_uwc"].includes(payload.direction)) return "Choose a travel direction";
   if (!isText(payload.area)) return "Choose a suburb";
   if (!isScheduleCell(payload.schedule)) return "Choose a valid day and time";
-  if (normalizeMemberLabels(payload.memberLabels).length === 0) return "Enter at least one group number";
   if (payload.connectionConsent !== true) return "Consent is required before requesting a connection";
   return "";
 }
@@ -324,14 +313,10 @@ async function handlePopularRoutes(response) {
         schedule,
         start: submission.direction === "to_uwc" ? area : "UWC",
         end: submission.direction === "to_uwc" ? "UWC" : area,
-        interested: 0,
-        members: []
+        interested: 0
       };
 
       route.interested += 1;
-      route.members.push({
-        label: route.members.length + 1
-      });
       routeMap.set(key, route);
     }
   }
@@ -474,13 +459,6 @@ function isScheduleCell(value) {
   return typeof value === "string" && /^(mon|tue|wed|thu|fri)@\d{2}:\d{2}$/.test(value);
 }
 
-function normalizeMemberLabels(value) {
-  const values = Array.isArray(value) ? value : String(value || "").split(/[\s,;#]+/);
-  return [...new Set(values
-    .map((item) => Number(String(item).replace(/\D/g, "")))
-    .filter((item) => Number.isInteger(item) && item > 0))];
-}
-
 function scheduleCells(submission) {
   return String(submission.schedule || "").split("|").filter(Boolean);
 }
@@ -505,7 +483,6 @@ function routeGroupMembers(submissions, direction, area, schedule) {
     if (seen.has(key)) continue;
     seen.add(key);
     members.push({
-      label: members.length + 1,
       submissionId: submission.id,
       student_number: submission.student_number
     });

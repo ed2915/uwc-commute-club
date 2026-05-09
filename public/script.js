@@ -132,17 +132,11 @@ connectForm.addEventListener("submit", async (event) => {
     direction: formData.get("connectDirection"),
     area: clean(formData.get("connectArea")),
     schedule: formData.get("connectSchedule"),
-    memberLabels: parseMemberLabels(formData.get("memberLabels")),
     connectionConsent: formData.get("connectionConsent") === "yes"
   };
 
   if (!isValidStudentNumber(payload.studentNumber)) {
     setConnectStatus("Use a valid 7-digit student number.", "error");
-    return;
-  }
-
-  if (payload.memberLabels.length === 0) {
-    setConnectStatus("Enter at least one group number.", "error");
     return;
   }
 
@@ -167,7 +161,7 @@ connectForm.addEventListener("submit", async (event) => {
     }
 
     connectForm.reset();
-    setConnectStatus(`Saved your request for ${result.requested} group number${result.requested === 1 ? "" : "s"}.`, "success");
+    setConnectStatus(`Saved your request. The organiser can review ${result.requested} other route/time interest${result.requested === 1 ? "" : "s"} in that group.`, "success");
   } catch (error) {
     setConnectStatus(error.message, "error");
   } finally {
@@ -346,14 +340,13 @@ function showRouteGroup(container, route) {
   if (!route) return;
 
   const popup = container.querySelector(".route-popup");
-  const labels = (route.members || []).map((member) => `#${member.label}`).join(", ");
   popup.hidden = false;
   popup.innerHTML = `
     <div>
       <strong>${escapeHtml(route.direction === "to_uwc" ? `${route.area} to UWC` : `UWC to ${route.area}`)}</strong>
       <span>${escapeHtml(formatSchedule(route.schedule))}</span>
     </div>
-    <p>Group numbers: ${escapeHtml(labels || "none")}</p>
+    <p>${route.interested} route/time interest${route.interested === 1 ? "" : "s"} in this group.</p>
     <button class="secondary-action use-group" type="button">Use this group</button>
   `;
 
@@ -361,9 +354,8 @@ function showRouteGroup(container, route) {
     connectForm.elements.connectDirection.value = route.direction;
     connectForm.elements.connectArea.value = route.area;
     connectForm.elements.connectSchedule.value = route.schedule;
-    connectForm.elements.memberLabels.value = (route.members || []).map((member) => member.label).join(", ");
     connectForm.scrollIntoView({ behavior: "smooth", block: "start" });
-    setConnectStatus("Group copied. Remove any numbers you do not want to request contact with.", "success");
+    setConnectStatus("Group copied. Enter your student number to request contact with the others in that route/time group.", "success");
   });
 }
 
@@ -413,13 +405,6 @@ function compareSchedules(first, second) {
 
 function clean(value) {
   return String(value || "").trim();
-}
-
-function parseMemberLabels(value) {
-  return [...new Set(String(value || "")
-    .split(/[\s,;#]+/)
-    .map((item) => Number(item.replace(/\D/g, "")))
-    .filter((item) => Number.isInteger(item) && item > 0))];
 }
 
 function normalizeStudentNumber(value) {
