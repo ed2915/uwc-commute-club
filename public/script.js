@@ -29,221 +29,149 @@ const timeSlots = [
   "19:30"
 ];
 
-const form = document.querySelector("#tripForm");
-const connectForm = document.querySelector("#connectForm");
-const statusMessage = document.querySelector("#status");
-const connectStatusMessage = document.querySelector("#connectStatus");
-const scheduleGrid = document.querySelector("#scheduleGrid");
-const suburbLabel = document.querySelector("#suburbLabel");
+const actionForm = document.querySelector("#actionForm");
+const actionStatusMessage = document.querySelector("#actionStatus");
 const toUwcRoutes = document.querySelector("#toUwcRoutes");
 const fromUwcRoutes = document.querySelector("#fromUwcRoutes");
 const uniqueUserCount = document.querySelector("#uniqueUserCount");
-const studentNumberInput = form.elements.studentNumber;
-const connectStudentNumberInput = connectForm.elements.connectStudentNumber;
-const removeStudentNumberButton = document.querySelector("#removeStudentNumber");
+const studentNumberInput = actionForm.elements.studentNumber;
+const addInterestButton = document.querySelector("#addInterest");
+const requestConnectionButton = document.querySelector("#requestConnection");
+const removeInterestButton = document.querySelector("#removeInterest");
 const selectedHeatmapDays = {
   to_uwc: "mon",
   from_uwc: "mon"
 };
 
-renderScheduleGrid();
-populateConnectionFormOptions();
+populateScheduleOptions();
 loadPopularRoutes();
-updateSuburbLabel();
-
-form.addEventListener("change", (event) => {
-  if (event.target.name === "direction") updateSuburbLabel();
-});
 
 studentNumberInput.addEventListener("input", () => {
   studentNumberInput.value = normalizeStudentNumber(studentNumberInput.value);
 });
 
-connectStudentNumberInput.addEventListener("input", () => {
-  connectStudentNumberInput.value = normalizeStudentNumber(connectStudentNumberInput.value);
-});
+addInterestButton.addEventListener("click", () => submitSelectedAction("add"));
+requestConnectionButton.addEventListener("click", () => submitSelectedAction("request"));
+removeInterestButton.addEventListener("click", () => submitSelectedAction("remove"));
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  setStatus("", "");
+async function submitSelectedAction(action) {
+  setActionStatus("", "");
 
-  const formData = new FormData(form);
-  const payload = {
-    direction: formData.get("direction"),
-    area: clean(formData.get("area")),
-    schedule: formData.getAll("schedule"),
-    studentNumber: normalizeStudentNumber(formData.get("studentNumber")),
-    privacyConsent: formData.get("privacyConsent") === "yes"
-  };
-
-  if (!isValidStudentNumber(payload.studentNumber)) {
-    setStatus("Use a valid 7-digit student number.", "error");
+  const payload = selectedRoutePayload();
+  const validationError = validateSelectedRoute(payload);
+  if (validationError) {
+    setActionStatus(validationError, "error");
     return;
   }
 
-  if (payload.schedule.length === 0) {
-    setStatus("Please choose at least one day and time in the schedule.", "error");
-    return;
-  }
-
-  if (!payload.privacyConsent) {
-    setStatus("Please consent to the privacy terms before joining route pools.", "error");
-    return;
-  }
-
-  const button = form.querySelector("button");
-  button.disabled = true;
+  setActionButtonsDisabled(true);
 
   try {
-    const response = await fetch("/api/submissions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const result = await response.json();
+    if (action === "add") await addSelectedInterest(payload);
+    if (action === "request") await requestSelectedConnection(payload);
+    if (action === "remove") await removeSelectedInterest(payload);
+  } catch (error) {
+    setActionStatus(error.message, "error");
+  } finally {
+    setActionButtonsDisabled(false);
+  }
+}
 
-    if (!response.ok) {
-      throw new Error(result.error || "Could not save your trip");
-    }
+async function addSelectedInterest(payload) {
+  const response = await fetch("/api/submissions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...payload,
+      schedule: [payload.schedule],
+      privacyConsent: true
+    })
+  });
+  const result = await response.json();
 
-    form.reset();
-    if (result.added === 0) {
-      setStatus("Those route and time choices were already linked to this student number.", "success");
-    } else if (result.skippedDuplicates > 0) {
-      setStatus("New route and time choices were added. Repeated choices were skipped.", "success");
-    } else {
-      setStatus("Your route and time choices were added.", "success");
-    }
+  if (!response.ok) {
+    throw new Error(result.error || "Could not add you to that route/time group");
+  }
+
+  if (result.added === 0) {
+    setActionStatus("You were already in that route/time group.", "success");
+  } else {
+    setActionStatus("Added you to that route/time group.", "success");
+  }
+  loadPopularRoutes();
+}
+
+async function requestSelectedConnection(payload) {
+  const response = await fetch("/api/connection-requests", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...payload,
+      connectionConsent: true
+    })
+  });
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.error || "Could not save your connection request");
+  }
+
+  setActionStatus(`Saved your request. The organiser can review ${result.requested} other route/time interest${result.requested === 1 ? "" : "s"} in that group.`, "success");
+}
+
+async function removeSelectedInterest(payload) {
+  const response = await fetch("/api/remove-student-number", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...payload,
+      schedule: [payload.schedule]
+    })
+  });
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.error || "Could not remove you from that route/time group");
+  }
+
+  if (result.deleted > 0) {
+    setActionStatus("Removed you from that route/time group.", "success");
     loadPopularRoutes();
-  } catch (error) {
-    setStatus(error.message, "error");
-  } finally {
-    button.disabled = false;
+  } else {
+    setActionStatus("No matching route/time interest was found for that student number.", "success");
   }
-});
+}
 
-connectForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  setConnectStatus("", "");
-
-  const formData = new FormData(connectForm);
-  const payload = {
-    studentNumber: normalizeStudentNumber(formData.get("connectStudentNumber")),
-    direction: formData.get("connectDirection"),
-    area: clean(formData.get("connectArea")),
-    schedule: formData.get("connectSchedule"),
-    connectionConsent: formData.get("connectionConsent") === "yes"
-  };
-
-  if (!isValidStudentNumber(payload.studentNumber)) {
-    setConnectStatus("Use a valid 7-digit student number.", "error");
-    return;
-  }
-
-  if (!payload.connectionConsent) {
-    setConnectStatus("Please consent before requesting a connection.", "error");
-    return;
-  }
-
-  const button = connectForm.querySelector("button");
-  button.disabled = true;
-
-  try {
-    const response = await fetch("/api/connection-requests", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || "Could not save your connection request");
-    }
-
-    connectForm.reset();
-    setConnectStatus(`Saved your request. The organiser can review ${result.requested} other route/time interest${result.requested === 1 ? "" : "s"} in that group.`, "success");
-  } catch (error) {
-    setConnectStatus(error.message, "error");
-  } finally {
-    button.disabled = false;
-  }
-});
-
-removeStudentNumberButton.addEventListener("click", async () => {
-  setStatus("", "");
-
-  const formData = new FormData(form);
-  const studentNumber = normalizeStudentNumber(studentNumberInput.value);
-  if (!isValidStudentNumber(studentNumber)) {
-    setStatus("Enter your 7-digit student number before removing route/time interests.", "error");
-    return;
-  }
-
-  const payload = {
+function selectedRoutePayload() {
+  const formData = new FormData(actionForm);
+  return {
     direction: formData.get("direction"),
     area: clean(formData.get("area")),
-    schedule: formData.getAll("schedule"),
-    studentNumber
+    schedule: formData.get("schedule"),
+    studentNumber: normalizeStudentNumber(formData.get("studentNumber")),
+    consent: formData.get("consent") === "yes"
   };
+}
 
-  if (payload.schedule.length === 0) {
-    setStatus("Choose at least one day and time to remove.", "error");
-    return;
-  }
+function validateSelectedRoute(payload) {
+  if (!["to_uwc", "from_uwc"].includes(payload.direction)) return "Choose a travel direction.";
+  if (!payload.area) return "Choose a suburb.";
+  if (!payload.schedule) return "Choose a day and time.";
+  if (!isValidStudentNumber(payload.studentNumber)) return "Use a valid 7-digit student number.";
+  if (!payload.consent) return "Please consent before continuing.";
+  return "";
+}
 
-  removeStudentNumberButton.disabled = true;
+function setActionButtonsDisabled(disabled) {
+  addInterestButton.disabled = disabled;
+  requestConnectionButton.disabled = disabled;
+  removeInterestButton.disabled = disabled;
+}
 
-  try {
-    const response = await fetch("/api/remove-student-number", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || "Could not remove those route/time interests");
-    }
-
-    if (result.deleted > 0) {
-      form.reset();
-      setStatus(`Removed ${result.deleted} selected route/time interest${result.deleted === 1 ? "" : "s"} for that student number.`, "success");
-      loadPopularRoutes();
-    } else {
-      setStatus("No matching route/time interests were found for that student number.", "success");
-    }
-  } catch (error) {
-    setStatus(error.message, "error");
-  } finally {
-    removeStudentNumberButton.disabled = false;
-  }
-});
-
-function renderScheduleGrid() {
-  const headerCells = days.map(([, label]) => `<div class="schedule-head">${label}</div>`).join("");
-  const rows = timeSlots.map((time) => {
-    const cells = days.map(([day, label], index) => {
-      const value = `${day}@${time}`;
-      const edgeClass = index === days.length - 1 ? " schedule-cell-edge" : "";
-      return `
-        <label class="schedule-cell${edgeClass}">
-          <input type="checkbox" name="schedule" value="${value}">
-          <span aria-label="${label} at ${time}"></span>
-        </label>
-      `;
-    }).join("");
-
-    return `
-      <div class="schedule-time">${time}</div>
-      ${cells}
-    `;
-  }).join("");
-
-  scheduleGrid.innerHTML = `
-    <div class="schedule-corner">Time</div>
-    ${headerCells}
-    ${rows}
-  `;
+function populateScheduleOptions() {
+  actionForm.elements.schedule.innerHTML = days
+    .flatMap(([day, label]) => timeSlots.map((time) => `<option value="${day}@${time}">${label} ${time}</option>`))
+    .join("");
 }
 
 async function loadPopularRoutes() {
@@ -263,11 +191,11 @@ function renderPopularRoutes(routes) {
   const toRoutes = routes.filter((route) => route.direction === "to_uwc");
   const fromRoutes = routes.filter((route) => route.direction === "from_uwc");
 
-  renderRouteHeatmap(toUwcRoutes, toRoutes, "to_uwc");
-  renderRouteHeatmap(fromUwcRoutes, fromRoutes, "from_uwc");
+  renderRouteTable(toUwcRoutes, toRoutes, "to_uwc");
+  renderRouteTable(fromUwcRoutes, fromRoutes, "from_uwc");
 }
 
-function renderRouteHeatmap(container, routes, direction) {
+function renderRouteTable(container, routes, direction) {
   if (routes.length === 0) {
     container.innerHTML = `<p class="empty-routes">No routes yet.</p>`;
     return;
@@ -324,55 +252,40 @@ function renderRouteHeatmap(container, routes, direction) {
   container.querySelectorAll(".day-tab").forEach((button) => {
     button.addEventListener("click", () => {
       selectedHeatmapDays[button.dataset.direction] = button.dataset.day;
-      renderRouteHeatmap(container, routes, direction);
+      renderRouteTable(container, routes, direction);
     });
   });
 
   container.querySelectorAll(".heatmap-cell[data-schedule]").forEach((button) => {
     button.addEventListener("click", () => {
       const route = routesByCell.get(`${button.dataset.area}|${button.dataset.schedule}`);
-      showRouteGroup(container, route);
+      useRouteGroup(container, route);
     });
   });
 }
 
-function showRouteGroup(container, route) {
+function useRouteGroup(container, route) {
   if (!route) return;
+
+  actionForm.elements.direction.value = route.direction;
+  actionForm.elements.area.value = route.area;
+  actionForm.elements.schedule.value = route.schedule;
+  actionForm.scrollIntoView({ behavior: "smooth", block: "start" });
+  setActionStatus(`${formatRoute(route)} selected. Enter your student number, then add yourself or request contact.`, "success");
 
   const popup = container.querySelector(".route-popup");
   popup.hidden = false;
   popup.innerHTML = `
     <div>
-      <strong>${escapeHtml(route.direction === "to_uwc" ? `${route.area} to UWC` : `UWC to ${route.area}`)}</strong>
+      <strong>${escapeHtml(formatRoute(route))}</strong>
       <span>${escapeHtml(formatSchedule(route.schedule))}</span>
     </div>
     <p>${route.interested} route/time interest${route.interested === 1 ? "" : "s"} in this group.</p>
-    <button class="secondary-action use-group" type="button">Use this group</button>
   `;
-
-  popup.querySelector(".use-group").addEventListener("click", () => {
-    connectForm.elements.connectDirection.value = route.direction;
-    connectForm.elements.connectArea.value = route.area;
-    connectForm.elements.connectSchedule.value = route.schedule;
-    connectForm.scrollIntoView({ behavior: "smooth", block: "start" });
-    setConnectStatus("Group copied. Enter your student number to request contact with the others in that route/time group.", "success");
-  });
 }
 
-function populateConnectionFormOptions() {
-  const sourceOptions = [...form.elements.area.options]
-    .filter((option) => option.value)
-    .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.textContent)}</option>`)
-    .join("");
-  connectForm.elements.connectArea.innerHTML = `<option value="">Choose a suburb</option>${sourceOptions}`;
-  connectForm.elements.connectSchedule.innerHTML = days
-    .flatMap(([day, label]) => timeSlots.map((time) => `<option value="${day}@${time}">${label} ${time}</option>`))
-    .join("");
-}
-
-function updateSuburbLabel() {
-  const direction = new FormData(form).get("direction");
-  suburbLabel.textContent = direction === "from_uwc" ? "Destination suburb" : "Starting suburb";
+function formatRoute(route) {
+  return route.direction === "to_uwc" ? `${route.area} to UWC` : `UWC to ${route.area}`;
 }
 
 function formatSchedule(schedule) {
@@ -391,16 +304,6 @@ function getScheduleDay(schedule) {
 
 function formatDay(day) {
   return days.find(([value]) => value === day)?.[1] || day;
-}
-
-function compareSchedules(first, second) {
-  const [firstDay, firstTime] = String(first).split("@");
-  const [secondDay, secondTime] = String(second).split("@");
-  const firstDayIndex = days.findIndex(([value]) => value === firstDay);
-  const secondDayIndex = days.findIndex(([value]) => value === secondDay);
-
-  if (firstDayIndex !== secondDayIndex) return firstDayIndex - secondDayIndex;
-  return String(firstTime).localeCompare(String(secondTime));
 }
 
 function clean(value) {
@@ -426,12 +329,7 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function setStatus(message, tone) {
-  statusMessage.textContent = message;
-  statusMessage.dataset.tone = tone;
-}
-
-function setConnectStatus(message, tone) {
-  connectStatusMessage.textContent = message;
-  connectStatusMessage.dataset.tone = tone;
+function setActionStatus(message, tone) {
+  actionStatusMessage.textContent = message;
+  actionStatusMessage.dataset.tone = tone;
 }

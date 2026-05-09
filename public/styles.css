@@ -68,7 +68,6 @@ h3 {
   font-size: 1.1rem;
 }
 
-.trip-form,
 .popular-routes,
 .connect-section {
   display: grid;
@@ -81,8 +80,7 @@ h3 {
 }
 
 .popular-routes,
-.connect-section,
-.trip-form {
+.connect-section {
   margin-top: 18px;
 }
 
@@ -374,6 +372,10 @@ button:disabled {
   gap: 10px;
 }
 
+.action-buttons {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .secondary-action {
   border: 1px solid var(--warn);
   background: #fff;
@@ -574,7 +576,6 @@ button.heatmap-cell:focus-visible {
     padding-inline: 10px;
   }
 
-  .trip-form,
   .connect-section,
   .popular-routes {
     padding: 12px;
@@ -583,6 +584,7 @@ button.heatmap-cell:focus-visible {
   .field-grid,
   .segmented,
   .form-actions,
+  .action-buttons,
   .routes-heading {
     grid-template-columns: 1fr;
   }

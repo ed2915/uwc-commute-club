@@ -97,10 +97,10 @@ join route pools and prevent duplicate entries.
 Public pages show aggregate route/time counts only. Raw student numbers are
 available only through the token-protected admin tool. Route-interest records
 should be deleted when they are no longer needed for the commute-club project.
-Students can also remove selected route-interest records from the public form
+Students can also remove a selected route-interest record from the action panel
 by entering their student number, choosing the same direction, suburb, and
-day/time cells, and using the remove button. This deletes only those selected
-route/time interests from the active database. The app does not keep extra
+day/time, and using the remove button. This deletes only that selected
+route/time interest from the active database. The app does not keep extra
 copies that continue storing a removed route/time interest after that removal.
 
 Students can also request contact with people already in a specific route/time

@@ -43,23 +43,23 @@
         </div>
       </section>
 
-      <section class="connect-section" aria-labelledby="connectTitle">
+      <section class="connect-section" aria-labelledby="actionTitle">
         <div>
-          <p class="eyebrow">Request contact</p>
-          <h2 id="connectTitle">Ask to Join a Route/Time Group</h2>
-          <p class="hint">Choose a route/time group from the tables above, then request contact with the people already in that cell.</p>
+          <p class="eyebrow">Take action</p>
+          <h2 id="actionTitle">Join or Request Contact</h2>
+          <p class="hint">Click a cell above to fill this in, or choose a route/time that is not shown yet.</p>
         </div>
 
-        <form id="connectForm" class="connect-form">
+        <form id="actionForm" class="connect-form">
           <fieldset>
             <legend>Direction</legend>
             <div class="segmented">
               <label>
-                <input type="radio" name="connectDirection" value="to_uwc" checked>
+                <input type="radio" name="direction" value="to_uwc" checked>
                 <span>To UWC</span>
               </label>
               <label>
-                <input type="radio" name="connectDirection" value="from_uwc">
+                <input type="radio" name="direction" value="from_uwc">
                 <span>From UWC</span>
               </label>
             </div>
@@ -68,141 +68,87 @@
           <div class="field-grid">
             <label>
               Suburb
-              <select name="connectArea" required></select>
+              <select name="area" required>
+                <option value="">Choose a suburb</option>
+                <option value="Athlone">Athlone</option>
+                <option value="Belhar">Belhar</option>
+                <option value="Bellville">Bellville</option>
+                <option value="Bellville South">Bellville South</option>
+                <option value="Bishop Lavis">Bishop Lavis</option>
+                <option value="Blue Downs">Blue Downs</option>
+                <option value="Bonteheuwel">Bonteheuwel</option>
+                <option value="Brackenfell">Brackenfell</option>
+                <option value="Brooklyn">Brooklyn</option>
+                <option value="Claremont">Claremont</option>
+                <option value="Delft">Delft</option>
+                <option value="Durbanville">Durbanville</option>
+                <option value="Eerste River">Eerste River</option>
+                <option value="Elsies River">Elsies River</option>
+                <option value="Gatesville">Gatesville</option>
+                <option value="Goodwood">Goodwood</option>
+                <option value="Grassy Park">Grassy Park</option>
+                <option value="Gugulethu">Gugulethu</option>
+                <option value="Hanover Park">Hanover Park</option>
+                <option value="Kraaifontein">Kraaifontein</option>
+                <option value="Khayelitsha">Khayelitsha</option>
+                <option value="Kuils River">Kuils River</option>
+                <option value="Langa">Langa</option>
+                <option value="Lansdowne">Lansdowne</option>
+                <option value="Lotus River">Lotus River</option>
+                <option value="Maitland">Maitland</option>
+                <option value="Manenberg">Manenberg</option>
+                <option value="Mitchells Plain">Mitchells Plain</option>
+                <option value="Mfuleni">Mfuleni</option>
+                <option value="Milnerton">Milnerton</option>
+                <option value="Montague Gardens">Montague Gardens</option>
+                <option value="Nyanga">Nyanga</option>
+                <option value="Parow">Parow</option>
+                <option value="Philippi">Philippi</option>
+                <option value="Pinelands">Pinelands</option>
+                <option value="Ravensmead">Ravensmead</option>
+                <option value="Retreat">Retreat</option>
+                <option value="Rondebosch">Rondebosch</option>
+                <option value="Salt River">Salt River</option>
+                <option value="Strandfontein">Strandfontein</option>
+                <option value="Thornton">Thornton</option>
+                <option value="Woodstock">Woodstock</option>
+              </select>
             </label>
             <label>
               Day and time
-              <select name="connectSchedule" required></select>
+              <select name="schedule" required></select>
             </label>
           </div>
 
           <div class="field-grid">
             <label>
               Your student number
-              <input name="connectStudentNumber" required autocomplete="off" inputmode="numeric" minlength="7" maxlength="7" pattern="[0-9]{7}" placeholder="1234567">
-              <span class="field-help">You must already be in this exact route/time group.</span>
+              <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="7" maxlength="7" pattern="[0-9]{7}" placeholder="1234567">
+              <span class="field-help">Use exactly 7 digits.</span>
             </label>
           </div>
+
+          <section class="privacy-notice" aria-labelledby="privacyTitle">
+            <h2 id="privacyTitle">Privacy and consent</h2>
+            <p>UWC Commute Club collects your student number, direction, suburb, and selected travel time only to group route/time interest.</p>
+            <p>Connection requests are saved for the organiser to review separately. They do not automatically share your details with anyone.</p>
+            <p>Your student number, or a student email address based on it, will not be shared with anyone in a pool unless you give explicit consent at a later stage.</p>
+            <p>Public route tables show aggregate counts only. Admin access is token-protected.</p>
+          </section>
 
           <label class="consent-check">
-            <input type="checkbox" name="connectionConsent" value="yes" required>
-            <span>I consent to saving this connection request for the organiser to review. I understand contact details will not be shared automatically.</span>
+            <input type="checkbox" name="consent" value="yes" required>
+            <span>I consent to UWC Commute Club using my student number for this route/time group. I understand contact details will not be shared automatically.</span>
           </label>
 
-          <button type="submit">Request connection</button>
-          <p id="connectStatus" class="status" role="status"></p>
+          <div class="form-actions action-buttons">
+            <button type="button" id="addInterest">Add me to this route/time</button>
+            <button type="button" id="requestConnection">Request contact with this group</button>
+            <button class="secondary-action" type="button" id="removeInterest">Remove me from this route/time</button>
+          </div>
+          <p id="actionStatus" class="status" role="status"></p>
         </form>
       </section>
-
-      <form id="tripForm" class="trip-form">
-        <div>
-          <p class="eyebrow">Add your details</p>
-          <h2>Add Yourself to a Route/Time Group</h2>
-        </div>
-
-        <fieldset>
-          <legend>Direction</legend>
-          <div class="segmented">
-            <label>
-              <input type="radio" name="direction" value="to_uwc" checked>
-              <span>To UWC</span>
-            </label>
-            <label>
-              <input type="radio" name="direction" value="from_uwc">
-              <span>From UWC</span>
-            </label>
-          </div>
-        </fieldset>
-
-        <div class="field-grid">
-          <label>
-            <span id="suburbLabel">Starting suburb</span>
-            <select name="area" required>
-              <option value="">Choose a suburb</option>
-              <option value="Athlone">Athlone</option>
-              <option value="Belhar">Belhar</option>
-              <option value="Bellville">Bellville</option>
-              <option value="Bellville South">Bellville South</option>
-              <option value="Bishop Lavis">Bishop Lavis</option>
-              <option value="Blue Downs">Blue Downs</option>
-              <option value="Bonteheuwel">Bonteheuwel</option>
-              <option value="Brackenfell">Brackenfell</option>
-              <option value="Brooklyn">Brooklyn</option>
-              <option value="Claremont">Claremont</option>
-              <option value="Delft">Delft</option>
-              <option value="Durbanville">Durbanville</option>
-              <option value="Eerste River">Eerste River</option>
-              <option value="Elsies River">Elsies River</option>
-              <option value="Gatesville">Gatesville</option>
-              <option value="Goodwood">Goodwood</option>
-              <option value="Grassy Park">Grassy Park</option>
-              <option value="Gugulethu">Gugulethu</option>
-              <option value="Hanover Park">Hanover Park</option>
-              <option value="Kraaifontein">Kraaifontein</option>
-              <option value="Khayelitsha">Khayelitsha</option>
-              <option value="Kuils River">Kuils River</option>
-              <option value="Langa">Langa</option>
-              <option value="Lansdowne">Lansdowne</option>
-              <option value="Lotus River">Lotus River</option>
-              <option value="Maitland">Maitland</option>
-              <option value="Manenberg">Manenberg</option>
-              <option value="Mitchells Plain">Mitchells Plain</option>
-              <option value="Mfuleni">Mfuleni</option>
-              <option value="Milnerton">Milnerton</option>
-              <option value="Montague Gardens">Montague Gardens</option>
-              <option value="Nyanga">Nyanga</option>
-              <option value="Parow">Parow</option>
-              <option value="Philippi">Philippi</option>
-              <option value="Pinelands">Pinelands</option>
-              <option value="Ravensmead">Ravensmead</option>
-              <option value="Retreat">Retreat</option>
-              <option value="Rondebosch">Rondebosch</option>
-              <option value="Salt River">Salt River</option>
-              <option value="Strandfontein">Strandfontein</option>
-              <option value="Thornton">Thornton</option>
-              <option value="Woodstock">Woodstock</option>
-            </select>
-          </label>
-        </div>
-
-        <fieldset>
-          <legend>Travel schedule</legend>
-          <p class="hint">Pick each day and time you usually want to start travelling.</p>
-          <div class="schedule-wrap">
-            <div class="schedule-grid" id="scheduleGrid"></div>
-          </div>
-        </fieldset>
-
-        <div class="field-grid">
-          <label>
-            Student number
-            <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="7" maxlength="7" pattern="[0-9]{7}" placeholder="1234567">
-            <span class="field-help">Use exactly 7 digits. Your student number is used to place you in route/time pools.</span>
-          </label>
-        </div>
-
-        <section class="privacy-notice" aria-labelledby="privacyTitle">
-          <h2 id="privacyTitle">Privacy and consent</h2>
-          <p>UWC Commute Club collects your student number, direction, suburb, and selected travel times only to group route/time interest.</p>
-          <p>Providing your student number is voluntary, but it is needed to join route pools and avoid duplicate entries. Your route interest will be kept only for this commute-club project and should be deleted when it is no longer needed for that purpose.</p>
-          <p>You can remove selected route/time interests linked to your student number at any time using the remove button below. When a selected interest is removed, that route/time entry is deleted from the active database, and no extra copies are kept by this app that would continue to store it.</p>
-          <p>Your student number, or a student email address based on it, will not be shared with anyone in a pool unless you give explicit consent at a later stage.</p>
-          <p>Connection requests are saved for the organiser to review separately. They do not automatically share your details with anyone.</p>
-          <p>Public route tables show aggregate counts only. Admin access is token-protected.</p>
-        </section>
-
-        <label class="consent-check">
-          <input type="checkbox" name="privacyConsent" value="yes" required>
-          <span>I consent to UWC Commute Club collecting my student number to group my route/time interest. I understand it will not be shared with other students, and that any later sharing of my student email/contact details will require separate consent.</span>
-        </label>
-
-        <div class="form-actions">
-          <button type="submit">Join route pools</button>
-          <button class="secondary-action" type="button" id="removeStudentNumber">Remove selected times</button>
-        </div>
-        <p class="field-help">To remove selected route/time interests, enter your student number, choose the same direction, suburb, and times above, then use the remove button.</p>
-        <p id="status" class="status" role="status"></p>
-      </form>
     </main>
 
     <script src="/script.js"></script>
