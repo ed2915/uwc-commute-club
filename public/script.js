@@ -94,9 +94,9 @@ async function addSelectedInterest(payload) {
   }
 
   if (result.added === 0) {
-    setActionStatus("You were already in that route/time group.", "success");
+    setActionStatus("You were already in that route/time group. You can now request contact with the group.", "success");
   } else {
-    setActionStatus("Added you to that route/time group.", "success");
+    setActionStatus("Added you to that route/time group. You can now request contact with the group.", "success");
   }
   loadPopularRoutes();
 }
@@ -113,7 +113,10 @@ async function requestSelectedConnection(payload) {
   const result = await response.json();
 
   if (!response.ok) {
-    throw new Error(result.error || "Could not save your connection request");
+    const fallback = response.status === 400
+      ? "Add yourself to this exact route/time group before requesting contact."
+      : "Could not save your connection request";
+    throw new Error(result.error || fallback);
   }
 
   setActionStatus(`Saved your request. The organiser can review ${result.requested} other route/time interest${result.requested === 1 ? "" : "s"} in that group.`, "success");

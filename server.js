@@ -253,7 +253,7 @@ async function handleConnectionRequest(request, response) {
   const requesterIsInGroup = group.some((member) => identityKey(member.student_number) === studentNumber);
 
   if (!requesterIsInGroup) {
-    sendJson(response, 400, { error: "Your student number must already be in that exact route/time group before you can request a connection." });
+    sendJson(response, 400, { error: "Add yourself to this exact route/time group before requesting contact." });
     return;
   }
 
