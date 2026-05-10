@@ -17,9 +17,7 @@
       <section class="popular-routes" aria-labelledby="popularRoutesTitle">
         <div class="routes-heading">
           <div>
-            <p class="eyebrow">Live route demand</p>
-            <h2 id="popularRoutesTitle">Popular routes and times</h2>
-            <p class="hint">If your suburb or time is not shown, manually choose it in the action panel below.</p>
+            <h2 id="popularRoutesTitle">Section 1: Popular routes and times</h2>
           </div>
           <div class="user-count" aria-live="polite">
             <span id="uniqueUserCount">0</span>
@@ -30,6 +28,7 @@
           <section aria-labelledby="toRoutesTitle">
             <h3 id="toRoutesTitle">To UWC</h3>
             <p class="hint">Click a cell with a number to choose the route/time group you want to join.</p>
+            <p class="hint">Your choice will automatically populate the fields in Section 2. If a route/time is currently unavailable, manually enter its details in Section 2.</p>
             <div id="toUwcRoutes" class="route-list">
               <p class="empty-routes">No routes yet.</p>
             </div>
@@ -37,6 +36,7 @@
           <section aria-labelledby="fromRoutesTitle">
             <h3 id="fromRoutesTitle">From UWC</h3>
             <p class="hint">Click a cell with a number to choose the route/time group you want to join.</p>
+            <p class="hint">Your choice will automatically populate the fields in Section 2. If a route/time is currently unavailable, manually enter its details in Section 2.</p>
             <div id="fromUwcRoutes" class="route-list">
               <p class="empty-routes">No routes yet.</p>
             </div>
@@ -46,9 +46,8 @@
 
       <section class="connect-section" aria-labelledby="actionTitle">
         <div>
-          <p class="eyebrow">Take action</p>
-          <h2 id="actionTitle">Join or Request Contact</h2>
-          <p class="hint">Click a cell above to fill this in, or choose a route/time that is not shown yet.</p>
+          <h2 id="actionTitle">Section 2: Join or Request Contact</h2>
+          <p class="hint">Click a cell above to automatically populate the fields below, or fill them manually.</p>
         </div>
 
         <form id="actionForm" class="connect-form">
