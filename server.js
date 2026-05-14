@@ -72,6 +72,11 @@ createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "GET" && url.pathname === "/api/student-pools") {
+      await handleStudentPools(url, response);
+      return;
+    }
+
     if (url.pathname === "/api/admin/submissions") {
       await handleAdminSubmissions(request, response);
       return;
@@ -325,6 +330,59 @@ async function handlePopularRoutes(response) {
     .sort((a, b) => b.interested - a.interested || a.start.localeCompare(b.start));
 
   sendJson(response, 200, { routes, uniqueUsers: countedKeys.size });
+}
+
+async function handleStudentPools(url, response) {
+  const studentNumber = normalizeStudentNumber(url.searchParams.get("studentNumber"));
+
+  if (!isValidStudentNumber(studentNumber)) {
+    sendJson(response, 400, { error: "Use a valid 7-digit student number" });
+    return;
+  }
+
+  const submissions = await readSubmissions();
+  const studentSubmissions = submissions.filter((submission) =>
+    identityKey(submission.student_number) === studentNumber &&
+    !["deleted", "archived"].includes(submission.status)
+  );
+  const seenPools = new Set();
+  const pools = [];
+
+  for (const submission of studentSubmissions) {
+    const area = normalizeArea(submission.area);
+
+    for (const schedule of scheduleCells(submission)) {
+      const key = [
+        submission.direction,
+        area.toLowerCase(),
+        schedule,
+        submission.status || "pending",
+        submission.matched_group_id || ""
+      ].join("|");
+
+      if (seenPools.has(key)) continue;
+      seenPools.add(key);
+
+      const groupMembers = routeGroupMembers(submissions, submission.direction, area, schedule);
+      pools.push({
+        id: submission.id,
+        direction: submission.direction,
+        area,
+        schedule,
+        status: submission.status || "pending",
+        matchedGroupId: submission.matched_group_id || "",
+        memberCount: groupMembers.length
+      });
+    }
+  }
+
+  pools.sort((a, b) =>
+    a.direction.localeCompare(b.direction) ||
+    a.area.localeCompare(b.area) ||
+    a.schedule.localeCompare(b.schedule)
+  );
+
+  sendJson(response, 200, { pools });
 }
 
 async function handleAdminSubmissions(request, response) {

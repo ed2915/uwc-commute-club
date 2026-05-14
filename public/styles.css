@@ -69,6 +69,7 @@ h3 {
 }
 
 .popular-routes,
+.pool-lookup-section,
 .connect-section {
   display: grid;
   gap: 18px;
@@ -80,13 +81,54 @@ h3 {
 }
 
 .popular-routes,
+.pool-lookup-section,
 .connect-section {
   margin-top: 18px;
 }
 
-.connect-form {
+.connect-form,
+.pool-lookup-form {
   display: grid;
   gap: 18px;
+}
+
+.pool-results {
+  display: grid;
+  gap: 10px;
+}
+
+.pool-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  background: #fff;
+}
+
+.pool-card p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.pool-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.pool-card dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.pool-card dd {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font-weight: 800;
 }
 
 .routes-heading {
@@ -577,6 +619,7 @@ button.heatmap-cell:focus-visible {
   }
 
   .connect-section,
+  .pool-lookup-section,
   .popular-routes {
     padding: 12px;
   }
@@ -585,6 +628,7 @@ button.heatmap-cell:focus-visible {
   .segmented,
   .form-actions,
   .action-buttons,
+  .pool-card dl,
   .routes-heading {
     grid-template-columns: 1fr;
   }

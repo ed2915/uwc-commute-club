@@ -30,6 +30,9 @@ const timeSlots = [
 ];
 
 const actionForm = document.querySelector("#actionForm");
+const poolLookupForm = document.querySelector("#poolLookupForm");
+const poolLookupStatusMessage = document.querySelector("#poolLookupStatus");
+const poolLookupResults = document.querySelector("#poolLookupResults");
 const actionStatusMessage = document.querySelector("#actionStatus");
 const toUwcRoutes = document.querySelector("#toUwcRoutes");
 const fromUwcRoutes = document.querySelector("#fromUwcRoutes");
@@ -38,6 +41,7 @@ const studentNumberInput = actionForm.elements.studentNumber;
 const addInterestButton = document.querySelector("#addInterest");
 const requestConnectionButton = document.querySelector("#requestConnection");
 const removeInterestButton = document.querySelector("#removeInterest");
+const poolLookupStudentNumberInput = poolLookupForm.elements.studentNumber;
 const selectedHeatmapDays = {
   to_uwc: "mon",
   from_uwc: "mon"
@@ -48,6 +52,15 @@ loadPopularRoutes();
 
 studentNumberInput.addEventListener("input", () => {
   studentNumberInput.value = normalizeStudentNumber(studentNumberInput.value);
+});
+
+poolLookupStudentNumberInput.addEventListener("input", () => {
+  poolLookupStudentNumberInput.value = normalizeStudentNumber(poolLookupStudentNumberInput.value);
+});
+
+poolLookupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await lookupStudentPools();
 });
 
 addInterestButton.addEventListener("click", () => submitSelectedAction("add"));
@@ -169,6 +182,70 @@ function setActionButtonsDisabled(disabled) {
   addInterestButton.disabled = disabled;
   requestConnectionButton.disabled = disabled;
   removeInterestButton.disabled = disabled;
+}
+
+async function lookupStudentPools() {
+  setPoolLookupStatus("", "");
+  const studentNumber = normalizeStudentNumber(poolLookupStudentNumberInput.value);
+
+  if (!isValidStudentNumber(studentNumber)) {
+    setPoolLookupStatus("Use a valid 7-digit student number.", "error");
+    return;
+  }
+
+  const button = poolLookupForm.querySelector("button");
+  button.disabled = true;
+
+  try {
+    const response = await fetch(`/api/student-pools?studentNumber=${encodeURIComponent(studentNumber)}`);
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Could not load your pools");
+    }
+
+    renderStudentPools(result.pools || []);
+    setPoolLookupStatus(result.pools?.length ? "Pools loaded." : "No pools found for that student number.", "success");
+  } catch (error) {
+    setPoolLookupStatus(error.message, "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function renderStudentPools(pools) {
+  if (pools.length === 0) {
+    poolLookupResults.innerHTML = `<p class="empty-routes">No pools found.</p>`;
+    return;
+  }
+
+  poolLookupResults.innerHTML = pools.map((pool) => `
+    <article class="pool-card">
+      <div>
+        <h3>${escapeHtml(formatPoolRoute(pool))}</h3>
+        <p>${escapeHtml(formatSchedule(pool.schedule))}</p>
+      </div>
+      <dl>
+        <div>
+          <dt>Status</dt>
+          <dd>${escapeHtml(formatPoolStatus(pool))}</dd>
+        </div>
+        <div>
+          <dt>Current interest</dt>
+          <dd>${pool.memberCount} student${pool.memberCount === 1 ? "" : "s"}</dd>
+        </div>
+      </dl>
+    </article>
+  `).join("");
+}
+
+function formatPoolRoute(pool) {
+  return pool.direction === "to_uwc" ? `${pool.area} to UWC` : `UWC to ${pool.area}`;
+}
+
+function formatPoolStatus(pool) {
+  if (pool.status === "matched" && pool.matchedGroupId) return `matched (${pool.matchedGroupId})`;
+  return pool.status || "pending";
 }
 
 function populateScheduleOptions() {
@@ -335,4 +412,9 @@ function escapeHtml(value) {
 function setActionStatus(message, tone) {
   actionStatusMessage.textContent = message;
   actionStatusMessage.dataset.tone = tone;
+}
+
+function setPoolLookupStatus(message, tone) {
+  poolLookupStatusMessage.textContent = message;
+  poolLookupStatusMessage.dataset.tone = tone;
 }

@@ -42,6 +42,29 @@
         </div>
       </section>
 
+      <section class="pool-lookup-section" aria-labelledby="poolLookupTitle">
+        <div>
+          <h2 id="poolLookupTitle">Check My Pools</h2>
+          <p class="hint">Enter your student number to see which route/time pools you are already in.</p>
+        </div>
+
+        <form id="poolLookupForm" class="pool-lookup-form">
+          <div class="field-grid">
+            <label>
+              Student number
+              <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="7" maxlength="7" pattern="[0-9]{7}" placeholder="1234567">
+              <span class="field-help">Use exactly 7 digits.</span>
+            </label>
+          </div>
+          <button type="submit">Show my pools</button>
+          <p id="poolLookupStatus" class="status" role="status"></p>
+        </form>
+
+        <div id="poolLookupResults" class="pool-results" aria-live="polite">
+          <p class="empty-routes">No lookup yet.</p>
+        </div>
+      </section>
+
       <section class="connect-section" aria-labelledby="actionTitle">
         <div>
           <h2 id="actionTitle">Join or Request Contact</h2>
