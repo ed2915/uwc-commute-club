@@ -21,6 +21,7 @@ const csvHeaders = [
   "student_number",
   "status",
   "matched_group_id",
+  "connected_student_numbers",
 ];
 
 const connectionRequestHeaders = [
@@ -162,6 +163,7 @@ async function handleSubmission(request, response) {
       schedule,
       studentNumber,
       "pending",
+      "",
       ""
     ].map(csvCell).join(","));
 
@@ -478,7 +480,15 @@ function authorizeAdmin(request, response) {
 function validateAdminPatch(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "Patch body must be an object";
 
-  const allowedFields = new Set(["direction", "area", "schedule", "student_number", "status", "matched_group_id"]);
+  const allowedFields = new Set([
+    "direction",
+    "area",
+    "schedule",
+    "student_number",
+    "status",
+    "matched_group_id",
+    "connected_student_numbers",
+  ]);
   const fields = Object.keys(payload);
   if (fields.length === 0) return "Patch body is empty";
   if (!fields.every((field) => allowedFields.has(field))) return "Patch contains an unsupported field";
@@ -488,6 +498,9 @@ function validateAdminPatch(payload) {
   if ("schedule" in payload && !String(payload.schedule).split("|").filter(Boolean).every(isScheduleCell)) return "Schedule is invalid";
   if ("student_number" in payload && !isValidStudentNumber(payload.student_number)) return "Student number is invalid";
   if ("status" in payload && !["pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
+  if ("connected_student_numbers" in payload && !isValidConnectedStudentNumbers(payload.connected_student_numbers)) {
+    return "Connected student numbers must be 7-digit numbers separated by |";
+  }
 
   for (const field of fields) {
     payload[field] = String(payload[field] || "").trim();
@@ -495,6 +508,9 @@ function validateAdminPatch(payload) {
 
   if ("student_number" in payload) payload.student_number = normalizeStudentNumber(payload.student_number);
   if ("area" in payload) payload.area = normalizeArea(payload.area);
+  if ("connected_student_numbers" in payload) {
+    payload.connected_student_numbers = normalizeConnectedStudentNumbers(payload.connected_student_numbers);
+  }
 
   return "";
 }
@@ -511,6 +527,20 @@ function normalizeStudentNumber(value) {
 
 function isValidStudentNumber(value) {
   return /^\d{7}$/.test(String(value || "").replace(/\D/g, ""));
+}
+
+function normalizeConnectedStudentNumbers(value) {
+  return [...new Set(String(value || "")
+    .split("|")
+    .filter(isValidStudentNumber)
+    .map(normalizeStudentNumber))]
+    .sort()
+    .join("|");
+}
+
+function isValidConnectedStudentNumbers(value) {
+  const parts = String(value || "").split("|").filter((part) => part.trim() !== "");
+  return parts.length === 0 || parts.every(isValidStudentNumber);
 }
 
 function isScheduleCell(value) {

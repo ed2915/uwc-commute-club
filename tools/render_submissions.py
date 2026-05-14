@@ -25,6 +25,7 @@ FIELDS = [
     "student_number",
     "status",
     "matched_group_id",
+    "connected_student_numbers",
 ]
 
 REQUEST_FIELDS = [
@@ -90,6 +91,45 @@ def main() -> int:
         choices=["pending", "matched", "deleted", "archived"],
     )
     patch_parser.add_argument("--matched-group-id")
+    patch_parser.add_argument(
+        "--connected-student-numbers",
+        help="Pipe-separated 7-digit student numbers already connected with this row.",
+    )
+
+    connect_parser = subparsers.add_parser(
+        "connect",
+        help="Manually update connected student numbers for one submission.",
+    )
+    connect_parser.add_argument("id", help="Submission id to update.")
+    connect_group = connect_parser.add_mutually_exclusive_group(required=True)
+    connect_group.add_argument(
+        "--add",
+        nargs="+",
+        metavar="SN",
+        help="Add one or more 7-digit student numbers to connected_student_numbers.",
+    )
+    connect_group.add_argument(
+        "--remove",
+        nargs="+",
+        metavar="SN",
+        help="Remove one or more 7-digit student numbers from connected_student_numbers.",
+    )
+    connect_group.add_argument(
+        "--set",
+        nargs="*",
+        metavar="SN",
+        help="Replace connected_student_numbers. Use --set with no SNs to clear it.",
+    )
+
+    cleanup_parser = subparsers.add_parser(
+        "delete-without-student-number",
+        help="Delete rows that do not have a valid 7-digit student number.",
+    )
+    cleanup_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually delete rows. Without this, only prints what would be deleted.",
+    )
 
     suggest_parser = subparsers.add_parser(
         "suggest-matches",
@@ -141,6 +181,21 @@ def main() -> int:
             result = client.patch_submission(args.id, patch)
             print("Updated:")
             print_table([result["submission"]])
+        elif args.command == "connect":
+            submissions = client.list_submissions()
+            result = update_connected_students(client, submissions, args)
+            print("Updated:")
+            print_table([result["submission"]])
+        elif args.command == "delete-without-student-number":
+            submissions = client.list_submissions()
+            rows = rows_without_valid_student_number(submissions)
+            print(f"Rows without a valid 7-digit student number: {len(rows)}")
+            if rows:
+                print_table(rows)
+            if args.apply:
+                for row in rows:
+                    client.delete_submission(row["id"])
+                    print(f"Deleted {row['id']}")
         elif args.command == "suggest-matches":
             submissions = client.list_submissions()
             groups = suggest_matches(submissions, min_size=args.min_size)
@@ -221,7 +276,51 @@ def build_patch(args: argparse.Namespace) -> dict[str, str]:
         patch["student_number"] = "".join(char for char in args.student_number if char.isdigit())
     if args.matched_group_id is not None:
         patch["matched_group_id"] = args.matched_group_id
+    if args.connected_student_numbers is not None:
+        patch["connected_student_numbers"] = normalize_connected_student_numbers(
+            args.connected_student_numbers
+        )
     return patch
+
+
+def update_connected_students(
+    client: AdminClient,
+    submissions: list[dict[str, str]],
+    args: argparse.Namespace,
+) -> dict[str, object]:
+    row = find_submission(submissions, args.id)
+    existing = set(split_student_numbers(row.get("connected_student_numbers", "")))
+
+    if args.add is not None:
+        existing.update(
+            split_student_numbers(normalize_connected_student_numbers("|".join(args.add)))
+        )
+    elif args.remove is not None:
+        existing.difference_update(
+            split_student_numbers(normalize_connected_student_numbers("|".join(args.remove)))
+        )
+    else:
+        existing = set(
+            split_student_numbers(normalize_connected_student_numbers("|".join(args.set)))
+        )
+
+    connected = normalize_connected_student_numbers("|".join(sorted(existing)))
+    return client.patch_submission(args.id, {"connected_student_numbers": connected})
+
+
+def find_submission(submissions: list[dict[str, str]], submission_id: str) -> dict[str, str]:
+    for row in submissions:
+        if row.get("id") == submission_id:
+            return normalize_submission(row)
+    raise AdminError(f"Submission not found: {submission_id}")
+
+
+def rows_without_valid_student_number(submissions: list[dict[str, str]]) -> list[dict[str, str]]:
+    return [
+        normalize_submission(row)
+        for row in submissions
+        if not is_valid_student_number(normalize_submission(row).get("student_number", ""))
+    ]
 
 
 def dedupe_plan(submissions: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
@@ -301,6 +400,33 @@ def print_table(rows: list[dict[str, str]], fields: list[str] | None = None) -> 
 
 def display(value: str) -> str:
     return str(value).replace("\n", " ").strip()
+
+
+def normalize_student_number(value: str) -> str:
+    return "".join(char for char in str(value) if char.isdigit())
+
+
+def is_valid_student_number(value: str) -> bool:
+    return len(normalize_student_number(value)) == 7
+
+
+def split_student_numbers(value: str) -> list[str]:
+    return [
+        normalize_student_number(part)
+        for part in str(value or "").split("|")
+        if is_valid_student_number(part)
+    ]
+
+
+def normalize_connected_student_numbers(value: str) -> str:
+    parts = [part for part in str(value or "").split("|") if part.strip()]
+    invalid = [part for part in parts if not is_valid_student_number(part)]
+    if invalid:
+        raise AdminError(
+            "Connected student numbers must be 7-digit numbers separated by |. "
+            f"Invalid: {', '.join(invalid)}"
+        )
+    return "|".join(sorted(set(normalize_student_number(part) for part in parts)))
 
 
 def suggest_matches(
