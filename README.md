@@ -53,7 +53,8 @@ python3 tools/render_submissions.py list
 python3 tools/render_submissions.py requests
 python3 tools/render_submissions.py suggest-matches
 python3 tools/render_submissions.py dedupe
-python3 tools/render_submissions.py set sub_abc123 --status matched --matched-group-id group_1
+python3 tools/render_submissions.py set sub_abc123 --status matched
+python3 tools/render_submissions.py connect sub_abc123 --add 7654321 2345678
 python3 tools/render_submissions.py delete sub_abc123
 ```
 
@@ -63,7 +64,7 @@ duplicate interest is skipped instead of counted twice.
 
 Suggested matches are pending entries with the same direction, the same suburb,
 and at least one overlapping day/time. Add `--apply` to `suggest-matches` to
-mark each suggested group as matched with a generated group id.
+mark each suggested row as matched.
 
 The `dedupe` command prints a cleanup plan for older duplicate interest rows.
 Add `--apply` to perform the cleanup.
@@ -109,4 +110,6 @@ in the same direction, suburb, and day/time group. The request stores the
 matching private row ids for organiser review in `connection_requests.csv` and
 does not automatically share contact details.
 
-Submissions are kept with a `status` field. Future matching can mark records as `matched` with a `matched_group_id`, which keeps an audit trail while preventing already-connected people from being matched again.
+Submissions are kept with a `status` field and a `connected_student_numbers`
+field. Manual matching can mark records as `matched` and record the other
+student numbers that have been connected with a particular student.

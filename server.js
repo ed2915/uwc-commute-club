@@ -20,7 +20,6 @@ const csvHeaders = [
   "schedule",
   "student_number",
   "status",
-  "matched_group_id",
   "connected_student_numbers",
 ];
 
@@ -163,7 +162,6 @@ async function handleSubmission(request, response) {
       schedule,
       studentNumber,
       "pending",
-      "",
       ""
     ].map(csvCell).join(","));
 
@@ -358,8 +356,7 @@ async function handleStudentPools(url, response) {
         submission.direction,
         area.toLowerCase(),
         schedule,
-        submission.status || "pending",
-        submission.matched_group_id || ""
+        submission.status || "pending"
       ].join("|");
 
       if (seenPools.has(key)) continue;
@@ -372,7 +369,6 @@ async function handleStudentPools(url, response) {
         area,
         schedule,
         status: submission.status || "pending",
-        matchedGroupId: submission.matched_group_id || "",
         memberCount: groupMembers.length
       });
     }
@@ -486,7 +482,6 @@ function validateAdminPatch(payload) {
     "schedule",
     "student_number",
     "status",
-    "matched_group_id",
     "connected_student_numbers",
   ]);
   const fields = Object.keys(payload);

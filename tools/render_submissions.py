@@ -24,7 +24,6 @@ FIELDS = [
     "schedule",
     "student_number",
     "status",
-    "matched_group_id",
     "connected_student_numbers",
 ]
 
@@ -90,7 +89,6 @@ def main() -> int:
         "--status",
         choices=["pending", "matched", "deleted", "archived"],
     )
-    patch_parser.add_argument("--matched-group-id")
     patch_parser.add_argument(
         "--connected-student-numbers",
         help="Pipe-separated 7-digit student numbers already connected with this row.",
@@ -144,7 +142,7 @@ def main() -> int:
     suggest_parser.add_argument(
         "--apply",
         action="store_true",
-        help="Mark suggested groups as matched with generated group ids.",
+        help="Mark suggested rows as matched.",
     )
 
     args = parser.parse_args()
@@ -274,8 +272,6 @@ def build_patch(args: argparse.Namespace) -> dict[str, str]:
             patch[field] = value
     if args.student_number is not None:
         patch["student_number"] = "".join(char for char in args.student_number if char.isdigit())
-    if args.matched_group_id is not None:
-        patch["matched_group_id"] = args.matched_group_id
     if args.connected_student_numbers is not None:
         patch["connected_student_numbers"] = normalize_connected_student_numbers(
             args.connected_student_numbers
@@ -524,10 +520,10 @@ def apply_match_groups(client: AdminClient, groups: list[dict[str, object]]) -> 
         for row in group["rows"]:
             result = client.patch_submission(
                 row["id"],
-                {"status": "matched", "matched_group_id": group_id},
+                {"status": "matched"},
             )
             submission = result["submission"]
-            print(f"  {submission['id']} -> matched")
+            print(f"  {submission['id']} -> matched ({group_id})")
 
 
 def schedule_cells(row: dict[str, str]) -> set[str]:

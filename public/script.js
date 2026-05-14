@@ -244,7 +244,6 @@ function formatPoolRoute(pool) {
 }
 
 function formatPoolStatus(pool) {
-  if (pool.status === "matched" && pool.matchedGroupId) return `matched (${pool.matchedGroupId})`;
   return pool.status || "pending";
 }
 
