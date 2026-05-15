@@ -87,7 +87,7 @@ def main() -> int:
     patch_parser.add_argument("--student-number")
     patch_parser.add_argument(
         "--status",
-        choices=["pending", "matched", "deleted", "archived"],
+        choices=["0", "pending", "matched", "deleted", "archived"],
     )
     patch_parser.add_argument(
         "--connected-student-numbers",
@@ -129,9 +129,19 @@ def main() -> int:
         help="Actually delete rows. Without this, only prints what would be deleted.",
     )
 
+    normalize_status_parser = subparsers.add_parser(
+        "status-to-zero",
+        help="Change legacy blank/pending submission statuses to 0.",
+    )
+    normalize_status_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually update rows. Without this, only prints what would change.",
+    )
+
     suggest_parser = subparsers.add_parser(
         "suggest-matches",
-        help="Suggest pending groups with the same direction, area, and overlapping schedule.",
+        help="Suggest active groups with the same direction, area, and overlapping schedule.",
     )
     suggest_parser.add_argument(
         "--min-size",
@@ -194,6 +204,16 @@ def main() -> int:
                 for row in rows:
                     client.delete_submission(row["id"])
                     print(f"Deleted {row['id']}")
+        elif args.command == "status-to-zero":
+            submissions = client.list_submissions()
+            rows = rows_with_legacy_pending_status(submissions)
+            print(f"Rows to change to status 0: {len(rows)}")
+            if rows:
+                print_table(rows)
+            if args.apply:
+                for row in rows:
+                    client.patch_submission(row["id"], {"status": "0"})
+                    print(f"Updated {row['id']}")
         elif args.command == "suggest-matches":
             submissions = client.list_submissions()
             groups = suggest_matches(submissions, min_size=args.min_size)
@@ -319,6 +339,14 @@ def rows_without_valid_student_number(submissions: list[dict[str, str]]) -> list
     ]
 
 
+def rows_with_legacy_pending_status(submissions: list[dict[str, str]]) -> list[dict[str, str]]:
+    return [
+        normalize_submission(row)
+        for row in submissions
+        if row.get("status", "") in {"", "pending"}
+    ]
+
+
 def dedupe_plan(submissions: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
     seen = set()
     delete_rows = []
@@ -430,16 +458,16 @@ def suggest_matches(
     min_size: int = 2,
 ) -> list[dict[str, object]]:
     submissions = [normalize_submission(submission) for submission in submissions]
-    pending = [
+    active = [
         submission
         for submission in submissions
-        if submission.get("status", "pending") == "pending"
+        if submission.get("status", "0") in {"0", "pending", ""}
         and submission.get("direction") in {"to_uwc", "from_uwc"}
         and submission.get("area")
     ]
     buckets: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
 
-    for submission in pending:
+    for submission in active:
         key = (submission["direction"], normalize_area_key(submission["area"]))
         buckets[key].append(submission)
 

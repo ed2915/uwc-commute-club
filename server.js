@@ -161,7 +161,7 @@ async function handleSubmission(request, response) {
       area,
       schedule,
       studentNumber,
-      "pending",
+      "0",
       ""
     ].map(csvCell).join(","));
 
@@ -303,7 +303,7 @@ async function handlePopularRoutes(response) {
 
   for (const submission of submissions) {
     const area = normalizeArea(submission.area);
-    if (submission.status && submission.status !== "pending") continue;
+    if (!isActiveStatus(submission.status)) continue;
     if (!area || !["to_uwc", "from_uwc"].includes(submission.direction)) continue;
 
     for (const schedule of scheduleCells(submission)) {
@@ -356,7 +356,7 @@ async function handleStudentPools(url, response) {
         submission.direction,
         area.toLowerCase(),
         schedule,
-        submission.status || "pending"
+        submission.status || "0"
       ].join("|");
 
       if (seenPools.has(key)) continue;
@@ -368,7 +368,7 @@ async function handleStudentPools(url, response) {
         direction: submission.direction,
         area,
         schedule,
-        status: submission.status || "pending",
+        status: submission.status || "0",
         memberCount: groupMembers.length
       });
     }
@@ -492,7 +492,7 @@ function validateAdminPatch(payload) {
   if ("area" in payload && !isText(payload.area)) return "Area is invalid";
   if ("schedule" in payload && !String(payload.schedule).split("|").filter(Boolean).every(isScheduleCell)) return "Schedule is invalid";
   if ("student_number" in payload && !isValidStudentNumber(payload.student_number)) return "Student number is invalid";
-  if ("status" in payload && !["pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
+  if ("status" in payload && !["0", "pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
   if ("connected_student_numbers" in payload && !isValidConnectedStudentNumbers(payload.connected_student_numbers)) {
     return "Connected student numbers must be 7-digit numbers separated by |";
   }
@@ -503,6 +503,7 @@ function validateAdminPatch(payload) {
 
   if ("student_number" in payload) payload.student_number = normalizeStudentNumber(payload.student_number);
   if ("area" in payload) payload.area = normalizeArea(payload.area);
+  if ("status" in payload) payload.status = normalizeSubmissionStatus(payload.status);
   if ("connected_student_numbers" in payload) {
     payload.connected_student_numbers = normalizeConnectedStudentNumbers(payload.connected_student_numbers);
   }
@@ -522,6 +523,10 @@ function normalizeStudentNumber(value) {
 
 function isValidStudentNumber(value) {
   return /^\d{7}$/.test(String(value || "").replace(/\D/g, ""));
+}
+
+function normalizeSubmissionStatus(status) {
+  return !status || status === "pending" ? "0" : String(status);
 }
 
 function normalizeConnectedStudentNumbers(value) {
@@ -557,7 +562,7 @@ function routeGroupMembers(submissions, direction, area, schedule) {
   const seen = new Set();
 
   for (const submission of submissions) {
-    if (submission.status && submission.status !== "pending") continue;
+    if (!isActiveStatus(submission.status)) continue;
     if (submission.direction !== direction) continue;
     if (normalizeArea(submission.area).toLowerCase() !== normalizeArea(area).toLowerCase()) continue;
     if (!scheduleCells(submission).includes(schedule)) continue;
@@ -572,6 +577,10 @@ function routeGroupMembers(submissions, direction, area, schedule) {
   }
 
   return members;
+}
+
+function isActiveStatus(status) {
+  return normalizeSubmissionStatus(status) === "0";
 }
 
 function interestKey(submission) {
@@ -614,6 +623,7 @@ async function readSubmissions() {
       if (!submission.student_number) {
         submission.student_number = submission.pilot_code || submission.nickname || "";
       }
+      submission.status = normalizeSubmissionStatus(submission.status);
       delete submission.pilot_code;
       delete submission.nickname;
       return submission;
