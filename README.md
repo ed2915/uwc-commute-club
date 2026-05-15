@@ -114,8 +114,10 @@ in the same direction, suburb, and day/time group. The request stores the
 matching private row ids for organiser review in `connection_requests.csv` and
 does not automatically share contact details.
 
-Submissions are kept with a `status` field and a `connected_student_numbers`
-field. New route/time interests start with status `0`, meaning the student has
-added themself to that group. Manual matching can mark records as `matched` and
-record the other student numbers that have been connected with a particular
-student.
+Submissions are kept with `status`, `connection_requests`, and
+`connected_student_numbers` fields. New route/time interests start with status
+`0`, meaning the student has added themself to that group. When a student
+requests contact with a pool, their matching row changes to status `1` and
+`connection_requests` records the student numbers already in that pool. Manual
+matching can mark records as `matched` and record the other student numbers
+that have been connected with a particular student.

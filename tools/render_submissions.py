@@ -24,6 +24,7 @@ FIELDS = [
     "schedule",
     "student_number",
     "status",
+    "connection_requests",
     "connected_student_numbers",
 ]
 
@@ -87,7 +88,11 @@ def main() -> int:
     patch_parser.add_argument("--student-number")
     patch_parser.add_argument(
         "--status",
-        choices=["0", "pending", "matched", "deleted", "archived"],
+        choices=["0", "1", "pending", "matched", "deleted", "archived"],
+    )
+    patch_parser.add_argument(
+        "--connection-requests",
+        help="Pipe-separated 7-digit student numbers this row has requested to connect with.",
     )
     patch_parser.add_argument(
         "--connected-student-numbers",
@@ -292,6 +297,10 @@ def build_patch(args: argparse.Namespace) -> dict[str, str]:
             patch[field] = value
     if args.student_number is not None:
         patch["student_number"] = "".join(char for char in args.student_number if char.isdigit())
+    if args.connection_requests is not None:
+        patch["connection_requests"] = normalize_connected_student_numbers(
+            args.connection_requests
+        )
     if args.connected_student_numbers is not None:
         patch["connected_student_numbers"] = normalize_connected_student_numbers(
             args.connected_student_numbers
@@ -461,7 +470,7 @@ def suggest_matches(
     active = [
         submission
         for submission in submissions
-        if submission.get("status", "0") in {"0", "pending", ""}
+        if submission.get("status", "0") in {"0", "1", "pending", ""}
         and submission.get("direction") in {"to_uwc", "from_uwc"}
         and submission.get("area")
     ]

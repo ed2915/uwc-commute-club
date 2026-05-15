@@ -20,6 +20,7 @@ const csvHeaders = [
   "schedule",
   "student_number",
   "status",
+  "connection_requests",
   "connected_student_numbers",
 ];
 
@@ -162,6 +163,7 @@ async function handleSubmission(request, response) {
       schedule,
       studentNumber,
       "0",
+      "",
       ""
     ].map(csvCell).join(","));
 
@@ -263,11 +265,33 @@ async function handleConnectionRequest(request, response) {
   }
 
   const targetMembers = group.filter((member) => identityKey(member.student_number) !== studentNumber);
+  const targetStudentNumbers = targetMembers
+    .map((member) => normalizeStudentNumber(member.student_number))
+    .filter(isValidStudentNumber);
 
   if (targetMembers.length === 0) {
     sendJson(response, 400, { error: "There are no other people in that route/time group yet." });
     return;
   }
+
+  const nextSubmissions = submissions.map((submission) => {
+    const isRequesterRoute =
+      identityKey(submission.student_number) === studentNumber &&
+      submission.direction === payload.direction &&
+      normalizeArea(submission.area).toLowerCase() === area.toLowerCase() &&
+      scheduleCells(submission).includes(payload.schedule);
+
+    if (!isRequesterRoute) return submission;
+
+    return {
+      ...submission,
+      status: "1",
+      connection_requests: normalizeStudentNumberList([
+        ...splitStudentNumberList(submission.connection_requests),
+        ...targetStudentNumbers
+      ])
+    };
+  });
 
   const row = [
     createConnectionRequestId(),
@@ -282,6 +306,7 @@ async function handleConnectionRequest(request, response) {
     ""
   ].map(csvCell).join(",");
 
+  await writeSubmissions(nextSubmissions);
   await appendFile(connectionRequestsFile, `${row}\n`);
   sendJson(response, 201, { ok: true, requested: targetMembers.length });
 }
@@ -482,6 +507,7 @@ function validateAdminPatch(payload) {
     "schedule",
     "student_number",
     "status",
+    "connection_requests",
     "connected_student_numbers",
   ]);
   const fields = Object.keys(payload);
@@ -492,7 +518,10 @@ function validateAdminPatch(payload) {
   if ("area" in payload && !isText(payload.area)) return "Area is invalid";
   if ("schedule" in payload && !String(payload.schedule).split("|").filter(Boolean).every(isScheduleCell)) return "Schedule is invalid";
   if ("student_number" in payload && !isValidStudentNumber(payload.student_number)) return "Student number is invalid";
-  if ("status" in payload && !["0", "pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
+  if ("status" in payload && !["0", "1", "pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
+  if ("connection_requests" in payload && !isValidStudentNumberList(payload.connection_requests)) {
+    return "Connection requests must be 7-digit numbers separated by |";
+  }
   if ("connected_student_numbers" in payload && !isValidConnectedStudentNumbers(payload.connected_student_numbers)) {
     return "Connected student numbers must be 7-digit numbers separated by |";
   }
@@ -504,6 +533,9 @@ function validateAdminPatch(payload) {
   if ("student_number" in payload) payload.student_number = normalizeStudentNumber(payload.student_number);
   if ("area" in payload) payload.area = normalizeArea(payload.area);
   if ("status" in payload) payload.status = normalizeSubmissionStatus(payload.status);
+  if ("connection_requests" in payload) {
+    payload.connection_requests = normalizeStudentNumberList(splitStudentNumberList(payload.connection_requests));
+  }
   if ("connected_student_numbers" in payload) {
     payload.connected_student_numbers = normalizeConnectedStudentNumbers(payload.connected_student_numbers);
   }
@@ -543,6 +575,22 @@ function isValidConnectedStudentNumbers(value) {
   return parts.length === 0 || parts.every(isValidStudentNumber);
 }
 
+function splitStudentNumberList(value) {
+  return String(value || "").split("|").filter((part) => part.trim() !== "");
+}
+
+function normalizeStudentNumberList(values) {
+  return [...new Set(values
+    .filter(isValidStudentNumber)
+    .map(normalizeStudentNumber))]
+    .sort()
+    .join("|");
+}
+
+function isValidStudentNumberList(value) {
+  return splitStudentNumberList(value).every(isValidStudentNumber);
+}
+
 function isScheduleCell(value) {
   return typeof value === "string" && /^(mon|tue|wed|thu|fri)@\d{2}:\d{2}$/.test(value);
 }
@@ -580,7 +628,7 @@ function routeGroupMembers(submissions, direction, area, schedule) {
 }
 
 function isActiveStatus(status) {
-  return normalizeSubmissionStatus(status) === "0";
+  return ["0", "1"].includes(normalizeSubmissionStatus(status));
 }
 
 function interestKey(submission) {
