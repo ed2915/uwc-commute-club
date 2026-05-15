@@ -246,6 +246,7 @@ function formatPoolRoute(pool) {
 function formatPoolStatus(pool) {
   if (pool.status === "0") return "added to pool";
   if (pool.status === "1") return "requested connection";
+  if (pool.status === "2") return "connected";
   return pool.status || "pending";
 }
 

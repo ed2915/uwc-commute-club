@@ -92,7 +92,7 @@ def main() -> int:
     patch_parser.add_argument("--student-number")
     patch_parser.add_argument(
         "--status",
-        choices=["0", "1", "pending", "matched", "deleted", "archived"],
+        choices=["0", "1", "2", "pending", "matched", "deleted", "archived"],
     )
     patch_parser.add_argument(
         "--connection-requests",
@@ -156,6 +156,17 @@ def main() -> int:
         help="Generate email text with yes/no consent links for a connection request row.",
     )
     consent_parser.add_argument("id", help="Submission id with status 1 and connection_requests.")
+
+    target_parser = subparsers.add_parser(
+        "target-emails",
+        help="Generate one email per target after requester consent is yes.",
+    )
+    target_parser.add_argument("id", help="Submission id with consent_response yes.")
+    target_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="After you have sent the emails, move pending SNs to connected_student_numbers and set status 2.",
+    )
 
     suggest_parser = subparsers.add_parser(
         "suggest-matches",
@@ -235,6 +246,9 @@ def main() -> int:
         elif args.command == "consent-email":
             submissions = client.list_submissions()
             print_consent_email(client, submissions, args.id)
+        elif args.command == "target-emails":
+            submissions = client.list_submissions()
+            print_target_emails(client, submissions, args.id, apply=args.apply)
         elif args.command == "suggest-matches":
             submissions = client.list_submissions()
             groups = suggest_matches(submissions, min_size=args.min_size)
@@ -365,6 +379,60 @@ def print_consent_email(
     print("Thank you.")
 
 
+def print_target_emails(
+    client: AdminClient,
+    submissions: list[dict[str, str]],
+    submission_id: str,
+    apply: bool = False,
+) -> None:
+    row = find_submission(submissions, submission_id)
+    if row.get("consent_response") != "yes":
+        raise AdminError("Target emails can only be generated after consent_response is yes.")
+
+    pending = split_student_numbers(row.get("connection_requests", ""))
+    if not pending:
+        raise AdminError("No pending connection_requests remain for this row.")
+
+    requester_email = student_email(row["student_number"])
+    pool = f"{format_direction(row['direction'])}, {row['area']}, {format_schedule(row['schedule'])}"
+
+    for index, target_sn in enumerate(pending, start=1):
+        if index > 1:
+            print()
+            print("-" * 72)
+            print()
+        print(f"To: {student_email(target_sn)}")
+        print("Subject: UWC Commute Club pool contact")
+        print()
+        print("Hello,")
+        print()
+        print("Another person in one of your UWC Commute Club pools has asked to connect.")
+        print("They have consented to share their UWC email address with you.")
+        print()
+        print(f"Pool: {pool}")
+        print(f"You may contact them at: {requester_email}")
+        print()
+        print("You are not required to respond if you do not want to.")
+        print()
+        print("Thank you.")
+
+    if not apply:
+        print()
+        print("Preview only. After sending these emails, rerun with --apply.")
+        return
+
+    existing = set(split_student_numbers(row.get("connected_student_numbers", "")))
+    existing.update(pending)
+    result = client.patch_submission(submission_id, {
+        "connection_requests": "",
+        "connected_student_numbers": normalize_connected_student_numbers("|".join(sorted(existing))),
+        "status": "2",
+    })
+    print()
+    print("Updated after sent emails:")
+    print_table([result["submission"]])
+
+
 def update_connected_students(
     client: AdminClient,
     submissions: list[dict[str, str]],
@@ -392,7 +460,7 @@ def update_connected_students(
     if args.add is not None:
         patch["connection_requests"] = normalize_connected_student_numbers("|".join(sorted(pending)))
         if not pending:
-            patch["status"] = "matched"
+            patch["status"] = "2"
     return client.patch_submission(args.id, patch)
 
 
@@ -557,7 +625,7 @@ def suggest_matches(
     active = [
         submission
         for submission in submissions
-        if submission.get("status", "0") in {"0", "1", "pending", ""}
+        if submission.get("status", "0") in {"0", "1", "2", "pending", ""}
         and submission.get("direction") in {"to_uwc", "from_uwc"}
         and submission.get("area")
     ]

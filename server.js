@@ -565,7 +565,7 @@ function validateAdminPatch(payload) {
   if ("area" in payload && !isText(payload.area)) return "Area is invalid";
   if ("schedule" in payload && !String(payload.schedule).split("|").filter(Boolean).every(isScheduleCell)) return "Schedule is invalid";
   if ("student_number" in payload && !isValidStudentNumber(payload.student_number)) return "Student or staff number is invalid";
-  if ("status" in payload && !["0", "1", "pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
+  if ("status" in payload && !["0", "1", "2", "pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
   if ("connection_requests" in payload && !isValidStudentNumberList(payload.connection_requests)) {
     return "Connection requests must be 6- or 7-digit numbers separated by |";
   }
@@ -677,7 +677,7 @@ function routeGroupMembers(submissions, direction, area, schedule) {
 }
 
 function isActiveStatus(status) {
-  return ["0", "1"].includes(normalizeSubmissionStatus(status));
+  return ["0", "1", "2"].includes(normalizeSubmissionStatus(status));
 }
 
 function interestKey(submission) {
