@@ -103,13 +103,13 @@ async function addSelectedInterest(payload) {
   const result = await response.json();
 
   if (!response.ok) {
-    throw new Error(result.error || "Could not add you to that route/time group");
+    throw new Error(result.error || "Could not add you to that pool");
   }
 
   if (result.added === 0) {
-    setActionStatus("You were already in that route/time group. You can now request contact with the group.", "success");
+    setActionStatus("You were already in that pool. You can now request contact with the pool.", "success");
   } else {
-    setActionStatus("Added you to that route/time group. You can now request contact with the group.", "success");
+    setActionStatus("Added you to that pool. You can now request contact with the pool.", "success");
   }
   loadPopularRoutes();
 }
@@ -127,12 +127,12 @@ async function requestSelectedConnection(payload) {
 
   if (!response.ok) {
     const fallback = response.status === 400
-      ? "Add yourself to this exact route/time group before requesting contact."
+      ? "Add yourself to this exact pool before requesting contact."
       : "Could not save your connection request";
     throw new Error(result.error || fallback);
   }
 
-  setActionStatus(`Saved your request. The organiser can review ${result.requested} other route/time interest${result.requested === 1 ? "" : "s"} in that group.`, "success");
+  setActionStatus(`Saved your request. The organiser can review ${result.requested} other pool interest${result.requested === 1 ? "" : "s"}.`, "success");
 }
 
 async function removeSelectedInterest(payload) {
@@ -147,14 +147,14 @@ async function removeSelectedInterest(payload) {
   const result = await response.json();
 
   if (!response.ok) {
-    throw new Error(result.error || "Could not remove you from that route/time group");
+    throw new Error(result.error || "Could not remove you from that pool");
   }
 
   if (result.deleted > 0) {
-    setActionStatus("Removed you from that route/time group.", "success");
+    setActionStatus("Removed you from that pool.", "success");
     loadPopularRoutes();
   } else {
-    setActionStatus("No matching route/time interest was found for that student number.", "success");
+    setActionStatus("No matching pool interest was found for that student or staff number.", "success");
   }
 }
 
@@ -173,7 +173,7 @@ function validateSelectedRoute(payload) {
   if (!["to_uwc", "from_uwc"].includes(payload.direction)) return "Choose a travel direction.";
   if (!payload.area) return "Choose a suburb.";
   if (!payload.schedule) return "Choose a day and time.";
-  if (!isValidStudentNumber(payload.studentNumber)) return "Use a valid 7-digit student number.";
+  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid student or staff number.";
   if (!payload.consent) return "Please consent before continuing.";
   return "";
 }
@@ -189,7 +189,7 @@ async function lookupStudentPools() {
   const studentNumber = normalizeStudentNumber(poolLookupStudentNumberInput.value);
 
   if (!isValidStudentNumber(studentNumber)) {
-    setPoolLookupStatus("Use a valid 7-digit student number.", "error");
+    setPoolLookupStatus("Enter a valid student or staff number.", "error");
     return;
   }
 
@@ -205,7 +205,7 @@ async function lookupStudentPools() {
     }
 
     renderStudentPools(result.pools || []);
-    setPoolLookupStatus(result.pools?.length ? "Pools loaded." : "No pools found for that student number.", "success");
+    setPoolLookupStatus(result.pools?.length ? "Pools loaded." : "No pools found for that student or staff number.", "success");
   } catch (error) {
     setPoolLookupStatus(error.message, "error");
   } finally {
@@ -244,7 +244,7 @@ function formatPoolRoute(pool) {
 }
 
 function formatPoolStatus(pool) {
-  if (pool.status === "0") return "added to group";
+  if (pool.status === "0") return "added to pool";
   if (pool.status === "1") return "requested connection";
   return pool.status || "pending";
 }
@@ -263,8 +263,8 @@ async function loadPopularRoutes() {
     renderPopularRoutes(result.routes || []);
   } catch {
     uniqueUserCount.textContent = "0";
-    toUwcRoutes.innerHTML = `<p class="empty-routes">Popular routes could not be loaded.</p>`;
-    fromUwcRoutes.innerHTML = `<p class="empty-routes">Popular routes could not be loaded.</p>`;
+    toUwcRoutes.innerHTML = `<p class="empty-routes">Popular pools could not be loaded.</p>`;
+    fromUwcRoutes.innerHTML = `<p class="empty-routes">Popular pools could not be loaded.</p>`;
   }
 }
 
@@ -278,7 +278,7 @@ function renderPopularRoutes(routes) {
 
 function renderRouteTable(container, routes, direction) {
   if (routes.length === 0) {
-    container.innerHTML = `<p class="empty-routes">No routes yet.</p>`;
+    container.innerHTML = `<p class="empty-routes">No pools yet.</p>`;
     return;
   }
 
@@ -308,7 +308,7 @@ function renderRouteTable(container, routes, direction) {
       ${cells}
     `;
   }).join("");
-  const grid = visibleRoutes.length === 0 ? `<p class="empty-routes">No routes for ${escapeHtml(formatDay(selectedDay))} yet.</p>` : `
+  const grid = visibleRoutes.length === 0 ? `<p class="empty-routes">No pools for ${escapeHtml(formatDay(selectedDay))} yet.</p>` : `
     <div class="heatmap-wrap">
       <div class="heatmap-grid" style="grid-template-columns: minmax(116px, 1fr) repeat(${schedules.length}, 24px);">
         <div class="heatmap-corner">Suburb</div>
@@ -352,7 +352,7 @@ function useRouteGroup(container, route) {
   actionForm.elements.area.value = route.area;
   actionForm.elements.schedule.value = route.schedule;
   actionForm.scrollIntoView({ behavior: "smooth", block: "start" });
-  setActionStatus(`${formatRoute(route)} selected. Enter your student number, then add yourself or request contact.`, "success");
+  setActionStatus(`${formatRoute(route)} selected. Enter your student or staff number, then add yourself or request contact.`, "success");
 
   const popup = container.querySelector(".route-popup");
   popup.hidden = false;
@@ -361,7 +361,7 @@ function useRouteGroup(container, route) {
       <strong>${escapeHtml(formatRoute(route))}</strong>
       <span>${escapeHtml(formatSchedule(route.schedule))}</span>
     </div>
-    <p>${route.interested} route/time interest${route.interested === 1 ? "" : "s"} in this group.</p>
+    <p>${route.interested} pool interest${route.interested === 1 ? "" : "s"}.</p>
   `;
 }
 
@@ -398,7 +398,7 @@ function normalizeStudentNumber(value) {
 }
 
 function isValidStudentNumber(value) {
-  return /^\d{7}$/.test(value);
+  return /^\d{6,7}$/.test(value);
 }
 
 function escapeHtml(value) {

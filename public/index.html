@@ -17,26 +17,26 @@
       <section class="popular-routes" aria-labelledby="popularRoutesTitle">
         <div class="routes-heading">
           <div>
-            <h2 id="popularRoutesTitle">Popular routes and times</h2>
+            <h2 id="popularRoutesTitle">Popular pools</h2>
           </div>
           <div class="user-count" aria-live="polite">
             <span id="uniqueUserCount">0</span>
-            <span>route/time interests</span>
+            <span>pool interests</span>
           </div>
         </div>
         <div class="route-columns">
           <section aria-labelledby="toRoutesTitle">
             <h3 id="toRoutesTitle">To UWC</h3>
-            <p class="hint">Click the button for your desired day under the table, then click a cell with a number to choose an existing route/time group you want to join.</p>
-            <p class="hint">Your choice will automatically populate the fields in the section below. If a route/time is currently empty, manually enter its details in the section below.</p>
+            <p class="hint">Click the button for your desired day under the table, then click a cell with a number to choose an existing pool you want to join.</p>
+            <p class="hint">Your choice will automatically populate the fields in the section below. If a pool is currently empty, manually enter its details in the section below.</p>
             <div id="toUwcRoutes" class="route-list">
-              <p class="empty-routes">No routes yet.</p>
+              <p class="empty-routes">No pools yet.</p>
             </div>
           </section>
           <section aria-labelledby="fromRoutesTitle">
             <h3 id="fromRoutesTitle">From UWC</h3>
             <div id="fromUwcRoutes" class="route-list">
-              <p class="empty-routes">No routes yet.</p>
+              <p class="empty-routes">No pools yet.</p>
             </div>
           </section>
         </div>
@@ -45,15 +45,14 @@
       <section class="pool-lookup-section" aria-labelledby="poolLookupTitle">
         <div>
           <h2 id="poolLookupTitle">Check My Pools</h2>
-          <p class="hint">Enter your student number to see which route/time pools you are already in.</p>
+          <p class="hint">Enter your student or staff number to see which pools you are already in.</p>
         </div>
 
         <form id="poolLookupForm" class="pool-lookup-form">
           <div class="field-grid">
             <label>
-              Student number
-              <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="7" maxlength="7" pattern="[0-9]{7}" placeholder="1234567">
-              <span class="field-help">Use exactly 7 digits.</span>
+              Student or staff number
+              <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="6" maxlength="7" pattern="[0-9]{6,7}" placeholder="1234567">
             </label>
           </div>
           <button type="submit">Show my pools</button>
@@ -67,7 +66,7 @@
 
       <section class="connect-section" aria-labelledby="actionTitle">
         <div>
-          <h2 id="actionTitle">Join or Request Contact</h2>
+          <h2 id="actionTitle">Join or request contact with a pool</h2>
           <p class="hint">Click a cell above to automatically populate the fields below, or fill them manually.</p>
         </div>
 
@@ -177,31 +176,30 @@
 
           <div class="field-grid">
             <label>
-              Your student number
-              <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="7" maxlength="7" pattern="[0-9]{7}" placeholder="1234567">
-              <span class="field-help">Use exactly 7 digits.</span>
+              Your student or staff number
+              <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="6" maxlength="7" pattern="[0-9]{6,7}" placeholder="1234567">
             </label>
           </div>
 
           <section class="privacy-notice" aria-labelledby="privacyTitle">
             <h2 id="privacyTitle">Privacy and consent</h2>
-            <p>UWC Commute Club collects your student number, direction, suburb, and selected travel time only to group route/time interest.</p>
+            <p>UWC Commute Club collects your student or staff number, direction, suburb, and selected travel time only to record pool interest.</p>
             <p>Connection requests are saved for the organiser to review separately. They do not automatically share your details with anyone.</p>
-            <p>Your student number, or a student email address based on it, will not be shared with anyone in a pool unless you give explicit consent at a later stage.</p>
-            <p>Public route tables show aggregate counts only. Admin access is token-protected.</p>
+            <p>Your student or staff number, or a UWC email address based on it, will not be shared with anyone in a pool unless you give explicit consent at a later stage.</p>
+            <p>Public pool tables show aggregate counts only. Admin access is token-protected.</p>
           </section>
 
           <label class="consent-check">
             <input type="checkbox" name="consent" value="yes" required>
-            <span>I consent to UWC Commute Club using my student number for this route/time group. I understand contact details will not be shared automatically.</span>
+            <span>I consent to UWC Commute Club using my student or staff number for this pool. I understand contact details will not be shared automatically.</span>
           </label>
 
           <div class="form-actions action-buttons">
-            <button type="button" id="addInterest">Add me to this route/time</button>
-            <button type="button" id="requestConnection">Request contact with this group</button>
-            <button class="secondary-action" type="button" id="removeInterest">Remove me from this route/time</button>
+            <button type="button" id="addInterest">Add me to this pool</button>
+            <button type="button" id="requestConnection">Request contact with this pool</button>
+            <button class="secondary-action" type="button" id="removeInterest">Remove me from this pool</button>
           </div>
-          <p class="field-help">Request contact only works after your student number has already been added to this exact route/time group.</p>
+          <p class="field-help">Request contact only works after your student or staff number has already been added to this exact pool.</p>
           <p id="actionStatus" class="status" role="status"></p>
         </form>
       </section>

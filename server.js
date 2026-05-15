@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +23,9 @@ const csvHeaders = [
   "status",
   "connection_requests",
   "connected_student_numbers",
+  "consent_token",
+  "consent_response",
+  "consent_responded_at",
 ];
 
 const connectionRequestHeaders = [
@@ -65,6 +69,11 @@ createServer(async (request, response) => {
 
     if (request.method === "POST" && url.pathname === "/api/connection-requests") {
       await handleConnectionRequest(request, response);
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/consent") {
+      await handleConsentResponse(url, response);
       return;
     }
 
@@ -164,6 +173,9 @@ async function handleSubmission(request, response) {
       studentNumber,
       "0",
       "",
+      "",
+      "",
+      "",
       ""
     ].map(csvCell).join(","));
 
@@ -184,8 +196,8 @@ function validateSubmission(payload) {
   if (!isText(payload.area)) return "Choose or enter a starting area";
   if (!Array.isArray(payload.schedule) || payload.schedule.length === 0) return "Choose at least one day and time";
   if (!payload.schedule.every(isScheduleCell)) return "One of the selected schedule times is invalid";
-  if (!isValidStudentNumber(payload.studentNumber)) return "Use a valid 7-digit student number";
-  if (payload.privacyConsent !== true) return "Consent is required to collect your student number";
+  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid student or staff number";
+  if (payload.privacyConsent !== true) return "Consent is required to collect your student or staff number";
   return "";
 }
 
@@ -193,7 +205,7 @@ async function handleRemoveStudentNumber(request, response) {
   const payload = await readRequestJson(request);
 
   if (!isValidStudentNumber(payload.studentNumber)) {
-    sendJson(response, 400, { error: "Use a valid 7-digit student number" });
+    sendJson(response, 400, { error: "Enter a valid student or staff number" });
     return;
   }
 
@@ -260,7 +272,7 @@ async function handleConnectionRequest(request, response) {
   const requesterIsInGroup = group.some((member) => identityKey(member.student_number) === studentNumber);
 
   if (!requesterIsInGroup) {
-    sendJson(response, 400, { error: "Add yourself to this exact route/time group before requesting contact." });
+    sendJson(response, 400, { error: "Add yourself to this exact pool before requesting contact." });
     return;
   }
 
@@ -270,7 +282,7 @@ async function handleConnectionRequest(request, response) {
     .filter(isValidStudentNumber);
 
   if (targetMembers.length === 0) {
-    sendJson(response, 400, { error: "There are no other people in that route/time group yet." });
+    sendJson(response, 400, { error: "There are no other people in that pool yet." });
     return;
   }
 
@@ -289,7 +301,9 @@ async function handleConnectionRequest(request, response) {
       connection_requests: normalizeStudentNumberList([
         ...splitStudentNumberList(submission.connection_requests),
         ...targetStudentNumbers
-      ])
+      ]),
+      consent_response: "",
+      consent_responded_at: ""
     };
   });
 
@@ -313,12 +327,42 @@ async function handleConnectionRequest(request, response) {
 
 function validateConnectionRequest(payload) {
   if (!payload || typeof payload !== "object") return "Connection request is missing";
-  if (!isValidStudentNumber(payload.studentNumber)) return "Use a valid 7-digit student number";
+  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid student or staff number";
   if (!["to_uwc", "from_uwc"].includes(payload.direction)) return "Choose a travel direction";
   if (!isText(payload.area)) return "Choose a suburb";
   if (!isScheduleCell(payload.schedule)) return "Choose a valid day and time";
   if (payload.connectionConsent !== true) return "Consent is required before requesting a connection";
   return "";
+}
+
+async function handleConsentResponse(url, response) {
+  const token = String(url.searchParams.get("token") || "").trim();
+  const answer = String(url.searchParams.get("answer") || "").trim().toLowerCase();
+
+  if (!token || !["yes", "no"].includes(answer)) {
+    sendHtml(response, 400, consentPage("Invalid Link", "This consent link is invalid."));
+    return;
+  }
+
+  const submissions = await readSubmissions();
+  const index = submissions.findIndex((submission) => submission.consent_token === token);
+
+  if (index === -1) {
+    sendHtml(response, 404, consentPage("Link Not Found", "This consent link was not found."));
+    return;
+  }
+
+  submissions[index] = {
+    ...submissions[index],
+    consent_response: answer,
+    consent_responded_at: new Date().toISOString()
+  };
+  await writeSubmissions(submissions);
+
+  const message = answer === "yes"
+    ? "Thank you. Your consent has been recorded."
+    : "Thank you. Your response has been recorded. Your email address will not be shared for this pool.";
+  sendHtml(response, 200, consentPage("Response Recorded", message));
 }
 
 async function handlePopularRoutes(response) {
@@ -361,7 +405,7 @@ async function handleStudentPools(url, response) {
   const studentNumber = normalizeStudentNumber(url.searchParams.get("studentNumber"));
 
   if (!isValidStudentNumber(studentNumber)) {
-    sendJson(response, 400, { error: "Use a valid 7-digit student number" });
+    sendJson(response, 400, { error: "Enter a valid student or staff number" });
     return;
   }
 
@@ -509,6 +553,9 @@ function validateAdminPatch(payload) {
     "status",
     "connection_requests",
     "connected_student_numbers",
+    "consent_token",
+    "consent_response",
+    "consent_responded_at",
   ]);
   const fields = Object.keys(payload);
   if (fields.length === 0) return "Patch body is empty";
@@ -517,14 +564,15 @@ function validateAdminPatch(payload) {
   if ("direction" in payload && !["to_uwc", "from_uwc"].includes(payload.direction)) return "Direction is invalid";
   if ("area" in payload && !isText(payload.area)) return "Area is invalid";
   if ("schedule" in payload && !String(payload.schedule).split("|").filter(Boolean).every(isScheduleCell)) return "Schedule is invalid";
-  if ("student_number" in payload && !isValidStudentNumber(payload.student_number)) return "Student number is invalid";
+  if ("student_number" in payload && !isValidStudentNumber(payload.student_number)) return "Student or staff number is invalid";
   if ("status" in payload && !["0", "1", "pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
   if ("connection_requests" in payload && !isValidStudentNumberList(payload.connection_requests)) {
-    return "Connection requests must be 7-digit numbers separated by |";
+    return "Connection requests must be 6- or 7-digit numbers separated by |";
   }
   if ("connected_student_numbers" in payload && !isValidConnectedStudentNumbers(payload.connected_student_numbers)) {
-    return "Connected student numbers must be 7-digit numbers separated by |";
+    return "Connected student or staff numbers must be 6- or 7-digit numbers separated by |";
   }
+  if ("consent_response" in payload && !["", "yes", "no"].includes(String(payload.consent_response || ""))) return "Consent response is invalid";
 
   for (const field of fields) {
     payload[field] = String(payload[field] || "").trim();
@@ -539,6 +587,7 @@ function validateAdminPatch(payload) {
   if ("connected_student_numbers" in payload) {
     payload.connected_student_numbers = normalizeConnectedStudentNumbers(payload.connected_student_numbers);
   }
+  if ("consent_token" in payload && !payload.consent_token) payload.consent_token = createConsentToken();
 
   return "";
 }
@@ -554,7 +603,7 @@ function normalizeStudentNumber(value) {
 }
 
 function isValidStudentNumber(value) {
-  return /^\d{7}$/.test(String(value || "").replace(/\D/g, ""));
+  return /^\d{6,7}$/.test(String(value || "").replace(/\D/g, ""));
 }
 
 function normalizeSubmissionStatus(status) {
@@ -655,6 +704,10 @@ function createSubmissionId() {
 
 function createConnectionRequestId() {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createConsentToken() {
+  return randomBytes(24).toString("hex");
 }
 
 async function readSubmissions() {
@@ -775,7 +828,41 @@ function sendJson(response, status, data) {
   response.end(JSON.stringify(data));
 }
 
+function sendHtml(response, status, html) {
+  response.writeHead(status, { "Content-Type": "text/html; charset=utf-8" });
+  response.end(html);
+}
+
 function sendText(response, status, text) {
   response.writeHead(status, { "Content-Type": "text/plain; charset=utf-8" });
   response.end(text);
+}
+
+function consentPage(title, message) {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(title)} | UWC Commute Club</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; background: #f4f7f5; color: #17201b; }
+      main { max-width: 620px; margin: 10vh auto; padding: 24px; background: #fff; border: 1px solid #d9e3dc; border-radius: 8px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(message)}</p>
+    </main>
+  </body>
+</html>`;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }

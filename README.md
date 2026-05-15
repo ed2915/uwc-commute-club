@@ -55,12 +55,13 @@ python3 tools/render_submissions.py suggest-matches
 python3 tools/render_submissions.py dedupe
 python3 tools/render_submissions.py status-to-zero
 python3 tools/render_submissions.py set sub_abc123 --status matched
+python3 tools/render_submissions.py consent-email sub_abc123
 python3 tools/render_submissions.py connect sub_abc123 --add 7654321 2345678
 python3 tools/render_submissions.py delete sub_abc123
 ```
 
-New submissions are stored as one interest row per selected day/time cell. If a
-student number submits the same direction, suburb, and day/time again, the
+New submissions are stored as one interest row per selected pool. If a student
+or staff number submits the same direction, suburb, and day/time again, the
 duplicate interest is skipped instead of counted twice.
 
 Suggested matches are active entries with the same direction, the same suburb,
@@ -84,40 +85,42 @@ The admin endpoints return 404 until `ADMIN_TOKEN` is configured.
 - Travelling to UWC or from UWC
 - Starting suburb from an alphabetic list
 - Travel schedule as exact day/time selections
-- Student number, used to group route/time pool interest
-- Popular route and time counts from captured submissions
+- Student or staff number, used to group pool interest
+- Popular pool counts from captured submissions
 - Connection requests for organiser review
 
 ## Privacy Handling
 
-Student numbers are collected initially only to determine who falls into common
-route/time pools. Student numbers, or student email addresses derived from them,
-must not be shared with other people in a pool without explicit consent at a
-later stage.
+Student or staff numbers are collected initially only to determine who falls
+into common pools. Student or staff numbers, or UWC email addresses derived
+from them, must not be shared with other people in a pool without explicit
+consent at a later stage.
 
 Before submission, users must tick an explicit consent checkbox confirming this
-limited purpose. Providing a student number is voluntary, but it is required to
-join route pools and prevent duplicate entries.
+limited purpose. Providing a student or staff number is voluntary, but it is
+required to join pools and prevent duplicate entries.
 
-Public pages show aggregate route/time counts only. Raw student numbers are
+Public pages show aggregate pool counts only. Raw student or staff numbers are
 available only through the token-protected admin tool. Route-interest records
 should be deleted when they are no longer needed for the commute-club project.
-Students can also remove a selected route-interest record from the action panel
-by entering their student number, choosing the same direction, suburb, and
-day/time, and using the remove button. This deletes only that selected
-route/time interest from the active database. The app does not keep extra
-copies that continue storing a removed route/time interest after that removal.
+Students can also remove a selected pool-interest record from the action panel
+by entering their student or staff number, choosing the same direction, suburb,
+and day/time, and using the remove button. This deletes only that selected
+pool interest from the active database. The app does not keep extra copies
+that continue storing a removed pool interest after that removal.
 
-Students can also request contact with people already in a specific route/time
-group. The server accepts a request only if that student number already appears
-in the same direction, suburb, and day/time group. The request stores the
+Students can also request contact with people already in a specific pool.
+The server accepts a request only if that student or staff number already
+appears in the same direction, suburb, and day/time pool. The request stores the
 matching private row ids for organiser review in `connection_requests.csv` and
 does not automatically share contact details.
 
 Submissions are kept with `status`, `connection_requests`, and
-`connected_student_numbers` fields. New route/time interests start with status
-`0`, meaning the student has added themself to that group. When a student
+`connected_student_numbers` fields. New pool interests start with status
+`0`, meaning the student has added themself to that pool. When a student
 requests contact with a pool, their matching row changes to status `1` and
-`connection_requests` records the student numbers already in that pool. Manual
-matching can mark records as `matched` and record the other student numbers
-that have been connected with a particular student.
+`connection_requests` records the student or staff numbers already in that
+pool. The `consent-email` command prints yes/no consent links without showing
+those other numbers to the requester. Manual matching can mark records as
+`matched` and record the other student or staff numbers that have been
+connected with a particular student.

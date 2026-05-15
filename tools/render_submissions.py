@@ -8,6 +8,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 import json
 import os
+import secrets
 import ssl
 import sys
 from urllib.error import HTTPError, URLError
@@ -26,6 +27,9 @@ FIELDS = [
     "status",
     "connection_requests",
     "connected_student_numbers",
+    "consent_token",
+    "consent_response",
+    "consent_responded_at",
 ]
 
 REQUEST_FIELDS = [
@@ -69,7 +73,7 @@ def main() -> int:
     subparsers.add_parser("json", help="Print raw JSON.")
     dedupe_parser = subparsers.add_parser(
         "dedupe",
-        help="Remove duplicate student-number/route/time interests from existing rows.",
+        help="Remove duplicate pool interests from existing rows.",
     )
     dedupe_parser.add_argument(
         "--apply",
@@ -92,16 +96,19 @@ def main() -> int:
     )
     patch_parser.add_argument(
         "--connection-requests",
-        help="Pipe-separated 7-digit student numbers this row has requested to connect with.",
+        help="Pipe-separated 6- or 7-digit student/staff numbers this row has requested to connect with.",
     )
     patch_parser.add_argument(
         "--connected-student-numbers",
-        help="Pipe-separated 7-digit student numbers already connected with this row.",
+        help="Pipe-separated 6- or 7-digit student/staff numbers already connected with this row.",
     )
+    patch_parser.add_argument("--consent-token")
+    patch_parser.add_argument("--consent-response", choices=["", "yes", "no"])
+    patch_parser.add_argument("--consent-responded-at")
 
     connect_parser = subparsers.add_parser(
         "connect",
-        help="Manually update connected student numbers for one submission.",
+        help="Manually update connected student/staff numbers for one submission.",
     )
     connect_parser.add_argument("id", help="Submission id to update.")
     connect_group = connect_parser.add_mutually_exclusive_group(required=True)
@@ -109,13 +116,13 @@ def main() -> int:
         "--add",
         nargs="+",
         metavar="SN",
-        help="Add one or more 7-digit student numbers to connected_student_numbers.",
+        help="Add one or more 6- or 7-digit student/staff numbers to connected_student_numbers.",
     )
     connect_group.add_argument(
         "--remove",
         nargs="+",
         metavar="SN",
-        help="Remove one or more 7-digit student numbers from connected_student_numbers.",
+        help="Remove one or more 6- or 7-digit student/staff numbers from connected_student_numbers.",
     )
     connect_group.add_argument(
         "--set",
@@ -126,7 +133,7 @@ def main() -> int:
 
     cleanup_parser = subparsers.add_parser(
         "delete-without-student-number",
-        help="Delete rows that do not have a valid 7-digit student number.",
+        help="Delete rows that do not have a valid 6- or 7-digit student/staff number.",
     )
     cleanup_parser.add_argument(
         "--apply",
@@ -144,15 +151,21 @@ def main() -> int:
         help="Actually update rows. Without this, only prints what would change.",
     )
 
+    consent_parser = subparsers.add_parser(
+        "consent-email",
+        help="Generate email text with yes/no consent links for a connection request row.",
+    )
+    consent_parser.add_argument("id", help="Submission id with status 1 and connection_requests.")
+
     suggest_parser = subparsers.add_parser(
         "suggest-matches",
-        help="Suggest active groups with the same direction, area, and overlapping schedule.",
+        help="Suggest active pools with the same direction, area, and overlapping schedule.",
     )
     suggest_parser.add_argument(
         "--min-size",
         type=int,
         default=2,
-        help="Minimum number of submissions in a suggested group. Default: 2",
+        help="Minimum number of submissions in a suggested pool. Default: 2",
     )
     suggest_parser.add_argument(
         "--apply",
@@ -202,7 +215,7 @@ def main() -> int:
         elif args.command == "delete-without-student-number":
             submissions = client.list_submissions()
             rows = rows_without_valid_student_number(submissions)
-            print(f"Rows without a valid 7-digit student number: {len(rows)}")
+            print(f"Rows without a valid 6- or 7-digit student/staff number: {len(rows)}")
             if rows:
                 print_table(rows)
             if args.apply:
@@ -219,6 +232,9 @@ def main() -> int:
                 for row in rows:
                     client.patch_submission(row["id"], {"status": "0"})
                     print(f"Updated {row['id']}")
+        elif args.command == "consent-email":
+            submissions = client.list_submissions()
+            print_consent_email(client, submissions, args.id)
         elif args.command == "suggest-matches":
             submissions = client.list_submissions()
             groups = suggest_matches(submissions, min_size=args.min_size)
@@ -305,7 +321,48 @@ def build_patch(args: argparse.Namespace) -> dict[str, str]:
         patch["connected_student_numbers"] = normalize_connected_student_numbers(
             args.connected_student_numbers
         )
+    for field in ["consent_token", "consent_response", "consent_responded_at"]:
+        value = getattr(args, field)
+        if value is not None:
+            patch[field] = value
     return patch
+
+
+def print_consent_email(
+    client: AdminClient,
+    submissions: list[dict[str, str]],
+    submission_id: str,
+) -> None:
+    row = find_submission(submissions, submission_id)
+    if row.get("status") != "1" or not row.get("connection_requests"):
+        raise AdminError("Consent email requires a row with status 1 and connection_requests.")
+
+    token = row.get("consent_token")
+    if not token:
+        token = create_local_token()
+        result = client.patch_submission(submission_id, {"consent_token": token})
+        row = normalize_submission(result["submission"])
+
+    base_url = os.environ.get("UWC_PUBLIC_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+    yes_link = f"{base_url}/consent?token={quote(token, safe='')}&answer=yes"
+    no_link = f"{base_url}/consent?token={quote(token, safe='')}&answer=no"
+    to_email = student_email(row["student_number"])
+
+    print(f"To: {to_email}")
+    print("Subject: UWC Commute Club pool contact request")
+    print()
+    print("Hello,")
+    print()
+    print("You asked to connect with other people in one of your UWC Commute Club pools.")
+    print("Before your UWC email address is shared, please choose one of the options below.")
+    print("The student/staff numbers of the other people in the pool are not shown in this email.")
+    print()
+    print(f"Pool: {format_direction(row['direction'])}, {row['area']}, {format_schedule(row['schedule'])}")
+    print()
+    print(f"Yes, I consent: {yes_link}")
+    print(f"No, I do not consent: {no_link}")
+    print()
+    print("Thank you.")
 
 
 def update_connected_students(
@@ -315,11 +372,12 @@ def update_connected_students(
 ) -> dict[str, object]:
     row = find_submission(submissions, args.id)
     existing = set(split_student_numbers(row.get("connected_student_numbers", "")))
+    pending = set(split_student_numbers(row.get("connection_requests", "")))
 
     if args.add is not None:
-        existing.update(
-            split_student_numbers(normalize_connected_student_numbers("|".join(args.add)))
-        )
+        additions = set(split_student_numbers(normalize_connected_student_numbers("|".join(args.add))))
+        existing.update(additions)
+        pending.difference_update(additions)
     elif args.remove is not None:
         existing.difference_update(
             split_student_numbers(normalize_connected_student_numbers("|".join(args.remove)))
@@ -330,7 +388,12 @@ def update_connected_students(
         )
 
     connected = normalize_connected_student_numbers("|".join(sorted(existing)))
-    return client.patch_submission(args.id, {"connected_student_numbers": connected})
+    patch = {"connected_student_numbers": connected}
+    if args.add is not None:
+        patch["connection_requests"] = normalize_connected_student_numbers("|".join(sorted(pending)))
+        if not pending:
+            patch["status"] = "matched"
+    return client.patch_submission(args.id, patch)
 
 
 def find_submission(submissions: list[dict[str, str]], submission_id: str) -> dict[str, str]:
@@ -440,7 +503,7 @@ def normalize_student_number(value: str) -> str:
 
 
 def is_valid_student_number(value: str) -> bool:
-    return len(normalize_student_number(value)) == 7
+    return len(normalize_student_number(value)) in {6, 7}
 
 
 def split_student_numbers(value: str) -> list[str]:
@@ -456,10 +519,34 @@ def normalize_connected_student_numbers(value: str) -> str:
     invalid = [part for part in parts if not is_valid_student_number(part)]
     if invalid:
         raise AdminError(
-            "Connected student numbers must be 7-digit numbers separated by |. "
+            "Connected student/staff numbers must be 6- or 7-digit numbers separated by |. "
             f"Invalid: {', '.join(invalid)}"
         )
     return "|".join(sorted(set(normalize_student_number(part) for part in parts)))
+
+
+def create_local_token() -> str:
+    return secrets.token_hex(24)
+
+
+def student_email(student_number: str) -> str:
+    return f"{normalize_student_number(student_number)}@myuwc.ac.za"
+
+
+def format_direction(direction: str) -> str:
+    return "To UWC" if direction == "to_uwc" else "From UWC"
+
+
+def format_schedule(schedule: str) -> str:
+    days = {
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday",
+    }
+    day, _, time = schedule.partition("@")
+    return f"{days.get(day, day)} {time}".strip()
 
 
 def suggest_matches(
