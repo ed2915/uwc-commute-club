@@ -39,7 +39,6 @@ const fromUwcRoutes = document.querySelector("#fromUwcRoutes");
 const uniqueUserCount = document.querySelector("#uniqueUserCount");
 const studentNumberInput = actionForm.elements.studentNumber;
 const addInterestButton = document.querySelector("#addInterest");
-const requestConnectionButton = document.querySelector("#requestConnection");
 const removeInterestButton = document.querySelector("#removeInterest");
 const poolLookupStudentNumberInput = poolLookupForm.elements.studentNumber;
 const selectedHeatmapDays = {
@@ -64,7 +63,6 @@ poolLookupForm.addEventListener("submit", async (event) => {
 });
 
 addInterestButton.addEventListener("click", () => submitSelectedAction("add"));
-requestConnectionButton.addEventListener("click", () => submitSelectedAction("request"));
 removeInterestButton.addEventListener("click", () => submitSelectedAction("remove"));
 
 async function submitSelectedAction(action) {
@@ -81,7 +79,6 @@ async function submitSelectedAction(action) {
 
   try {
     if (action === "add") await addSelectedInterest(payload);
-    if (action === "request") await requestSelectedConnection(payload);
     if (action === "remove") await removeSelectedInterest(payload);
   } catch (error) {
     setActionStatus(error.message, "error");
@@ -107,32 +104,13 @@ async function addSelectedInterest(payload) {
   }
 
   if (result.added === 0) {
-    setActionStatus("You were already in that pool. You can now request contact with the pool.", "success");
+    setActionStatus("You were already in that pool.", "success");
+  } else if (result.pendingConnections > 0) {
+    setActionStatus("Added you to that pool. Because other people are already in it, the organiser may email you to ask for consent before sharing your UWC email address.", "success");
   } else {
-    setActionStatus("Added you to that pool. You can now request contact with the pool.", "success");
+    setActionStatus("Added you to that pool.", "success");
   }
   loadPopularRoutes();
-}
-
-async function requestSelectedConnection(payload) {
-  const response = await fetch("/api/connection-requests", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...payload,
-      connectionConsent: true
-    })
-  });
-  const result = await response.json();
-
-  if (!response.ok) {
-    const fallback = response.status === 400
-      ? "Add yourself to this exact pool before requesting contact."
-      : "Could not save your connection request";
-    throw new Error(result.error || fallback);
-  }
-
-  setActionStatus(`Saved your request. The organiser can review ${result.requested} other pool interest${result.requested === 1 ? "" : "s"}.`, "success");
 }
 
 async function removeSelectedInterest(payload) {
@@ -180,7 +158,6 @@ function validateSelectedRoute(payload) {
 
 function setActionButtonsDisabled(disabled) {
   addInterestButton.disabled = disabled;
-  requestConnectionButton.disabled = disabled;
   removeInterestButton.disabled = disabled;
 }
 
@@ -245,7 +222,7 @@ function formatPoolRoute(pool) {
 
 function formatPoolStatus(pool) {
   if (pool.status === "0") return "added to pool";
-  if (pool.status === "1") return "requested connection";
+  if (pool.status === "1") return "awaiting consent email";
   if (pool.status === "2") return "connected";
   return pool.status || "pending";
 }
@@ -353,7 +330,7 @@ function useRouteGroup(container, route) {
   actionForm.elements.area.value = route.area;
   actionForm.elements.schedule.value = route.schedule;
   actionForm.scrollIntoView({ behavior: "smooth", block: "start" });
-  setActionStatus(`${formatRoute(route)} selected. Enter your student or staff number, then add yourself or request contact.`, "success");
+  setActionStatus(`${formatRoute(route)} selected. Enter your student or staff number, then add yourself to the pool.`, "success");
 
   const popup = container.querySelector(".route-popup");
   popup.hidden = false;

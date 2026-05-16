@@ -184,6 +184,11 @@ def main() -> int:
         help="Mark suggested rows as matched.",
     )
 
+    subparsers.add_parser(
+        "review-actions",
+        help="Interactively review consent and target emails that need organiser approval.",
+    )
+
     args = parser.parse_args()
 
     if not args.token:
@@ -256,6 +261,9 @@ def main() -> int:
 
             if args.apply:
                 apply_match_groups(client, groups)
+        elif args.command == "review-actions":
+            submissions = client.list_submissions()
+            review_actions(client, submissions)
     except AdminError as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
@@ -421,16 +429,171 @@ def print_target_emails(
         print("Preview only. After sending these emails, rerun with --apply.")
         return
 
+    result = apply_target_emails_sent(client, row)
+    print()
+    print("Updated after sent emails:")
+    print_table([result["submission"]])
+
+
+def apply_target_emails_sent(
+    client: AdminClient,
+    row: dict[str, str],
+) -> dict[str, object]:
+    pending = split_student_numbers(row.get("connection_requests", ""))
     existing = set(split_student_numbers(row.get("connected_student_numbers", "")))
     existing.update(pending)
-    result = client.patch_submission(submission_id, {
+    return client.patch_submission(row["id"], {
         "connection_requests": "",
         "connected_student_numbers": normalize_connected_student_numbers("|".join(sorted(existing))),
         "status": "2",
     })
-    print()
-    print("Updated after sent emails:")
-    print_table([result["submission"]])
+
+
+def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> None:
+    rows = [normalize_submission(row) for row in submissions]
+    pending_consent = [
+        row for row in rows
+        if row.get("status") == "1"
+        and split_student_numbers(row.get("connection_requests", ""))
+        and not row.get("consent_response")
+    ]
+    approved_targets = [
+        row for row in rows
+        if row.get("consent_response") == "yes"
+        and split_student_numbers(row.get("connection_requests", ""))
+    ]
+    rejected_requests = [
+        row for row in rows
+        if row.get("consent_response") == "no"
+        and split_student_numbers(row.get("connection_requests", ""))
+    ]
+    unattended_groups = unrequested_multi_person_pools(rows)
+
+    print("Review actions")
+    print("==============")
+    print(f"Pending consent emails: {len(pending_consent)}")
+    print(f"Approved target email batches: {len(approved_targets)}")
+    print(f"Rejected consent rows needing cleanup: {len(rejected_requests)}")
+    print(f"Multi-person pools with no pending consent row: {len(unattended_groups)}")
+
+    if pending_consent:
+        print()
+        print("Pending consent emails")
+        print("----------------------")
+        for row in pending_consent:
+            print()
+            print_action_row(row)
+            if ask_yes_no("Generate this consent email now?"):
+                print()
+                print_consent_email(client, rows, row["id"])
+
+    if approved_targets:
+        print()
+        print("Approved target emails")
+        print("----------------------")
+        for row in approved_targets:
+            print()
+            print_action_row(row)
+            pending = split_student_numbers(row.get("connection_requests", ""))
+            print(f"Targets: {', '.join(pending)}")
+            if ask_yes_no("Generate target emails for this approved request?"):
+                print()
+                print_target_emails(client, rows, row["id"], apply=False)
+                if ask_yes_no("Have you sent these target emails and want to mark them connected?"):
+                    result = apply_target_emails_sent(client, row)
+                    print("Updated:")
+                    print_table([result["submission"]])
+
+    if rejected_requests:
+        print()
+        print("Rejected consent")
+        print("----------------")
+        for row in rejected_requests:
+            print()
+            print_action_row(row)
+            if ask_yes_no("Clear the pending connection request for this row?"):
+                result = client.patch_submission(row["id"], {
+                    "connection_requests": "",
+                    "status": "0",
+                })
+                print("Updated:")
+                print_table([result["submission"]])
+
+    if unattended_groups:
+        print()
+        print("Sanity check: multi-person pools without pending consent")
+        print("-------------------------------------------------------")
+        print("These are usually older rows or pools where nobody joined after the automatic workflow existed.")
+        for index, group in enumerate(unattended_groups, start=1):
+            rows_in_group = group["rows"]
+            student_numbers = ", ".join(row.get("student_number", "") for row in rows_in_group)
+            print(
+                f"{index}. {format_direction(group['direction'])}, {group['area']}, "
+                f"{format_schedule(group['schedule'])}: {student_numbers}"
+            )
+
+    if not any([pending_consent, approved_targets, rejected_requests, unattended_groups]):
+        print()
+        print("Nothing needs attention right now.")
+
+
+def print_action_row(row: dict[str, str]) -> None:
+    print(
+        f"{row['id']} | {row.get('student_number', '')} | "
+        f"{format_direction(row.get('direction', ''))}, {row.get('area', '')}, "
+        f"{format_schedule(row.get('schedule', ''))}"
+    )
+
+
+def ask_yes_no(question: str) -> bool:
+    answer = input(f"{question} [y/N] ").strip().lower()
+    return answer in {"y", "yes"}
+
+
+def unrequested_multi_person_pools(
+    submissions: list[dict[str, str]],
+) -> list[dict[str, object]]:
+    active = [
+        row for row in submissions
+        if row.get("status", "0") in {"0", "1", "2", "pending", ""}
+        and row.get("direction") in {"to_uwc", "from_uwc"}
+        and row.get("area")
+        and is_valid_student_number(row.get("student_number", ""))
+    ]
+    by_pool: dict[tuple[str, str, str], list[dict[str, str]]] = defaultdict(list)
+
+    for row in active:
+        for cell in schedule_cells(row):
+            key = (row["direction"], normalize_area_key(row["area"]), cell)
+            by_pool[key].append(row)
+
+    groups = []
+    for (direction, area_key, schedule), rows in by_pool.items():
+        student_numbers = {
+            normalize_student_number(row.get("student_number", ""))
+            for row in rows
+        }
+        has_pending = any(
+            split_student_numbers(row.get("connection_requests", ""))
+            for row in rows
+        )
+        if len(student_numbers) < 2 or has_pending:
+            continue
+        groups.append({
+            "direction": direction,
+            "area": display_area(area_key, rows),
+            "schedule": schedule,
+            "rows": sorted(rows, key=lambda item: item.get("submitted_at", "")),
+        })
+
+    return sorted(
+        groups,
+        key=lambda group: (
+            str(group["direction"]),
+            str(group["area"]),
+            str(group["schedule"]),
+        ),
+    )
 
 
 def update_connected_students(

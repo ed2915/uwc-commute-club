@@ -109,18 +109,13 @@ and day/time, and using the remove button. This deletes only that selected
 pool interest from the active database. The app does not keep extra copies
 that continue storing a removed pool interest after that removal.
 
-Students can also request contact with people already in a specific pool.
-The server accepts a request only if that student or staff number already
-appears in the same direction, suburb, and day/time pool. The request stores the
-matching private row ids for organiser review in `connection_requests.csv` and
-does not automatically share contact details.
-
 Submissions are kept with `status`, `connection_requests`, and
 `connected_student_numbers` fields. New pool interests start with status
-`0`, meaning the student has added themself to that pool. When a student
-requests contact with a pool, their matching row changes to status `1` and
-`connection_requests` records the student or staff numbers already in that
-pool. The `consent-email` command prints yes/no consent links without showing
-those other numbers to the requester. Manual matching can mark records as
-`matched` and record the other student or staff numbers that have been
-connected with a particular student.
+`0`, meaning the student has added themself to that pool. If the same pool
+already has other active student or staff numbers, the new row starts with
+status `1` and `connection_requests` records the existing numbers in that pool
+for organiser review. No contact details are shared automatically. The
+`consent-email` command prints yes/no consent links without showing those other
+numbers to the requester. After the requester consents and the organiser sends
+the target emails, `target-emails --apply` moves those numbers into
+`connected_student_numbers` and marks the requester row as status `2`.

@@ -157,36 +157,70 @@ async function handleSubmission(request, response) {
   const area = normalizeArea(payload.area);
   const existingKeys = new Set(submissions.flatMap(submissionInterestKeys));
   const submittedAt = new Date().toISOString();
+  const newConnectionRequests = [];
   const rows = [...new Set(payload.schedule)]
-    .filter((schedule) => !existingKeys.has(interestKey({
-      direction: payload.direction,
-      area,
-      schedule,
-      student_number: studentNumber
-    })))
-    .map((schedule) => [
-      createSubmissionId(),
-      submittedAt,
-      payload.direction,
-      area,
-      schedule,
-      studentNumber,
-      "0",
-      "",
-      "",
-      "",
-      "",
-      ""
-    ].map(csvCell).join(","));
+    .filter((schedule) => isScheduleCell(schedule))
+    .filter((schedule) => {
+      return !existingKeys.has(interestKey({
+        direction: payload.direction,
+        area,
+        schedule,
+        student_number: studentNumber
+      }));
+    })
+    .map((schedule) => {
+      const submissionId = createSubmissionId();
+      const group = routeGroupMembers(submissions, payload.direction, area, schedule);
+      const targetMembers = group.filter((member) => identityKey(member.student_number) !== studentNumber);
+      const targetStudentNumbers = targetMembers
+        .map((member) => normalizeStudentNumber(member.student_number))
+        .filter(isValidStudentNumber);
+      const connectionRequests = normalizeStudentNumberList(targetStudentNumbers);
+
+      if (targetStudentNumbers.length > 0) {
+        newConnectionRequests.push([
+          createConnectionRequestId(),
+          submittedAt,
+          studentNumber,
+          payload.direction,
+          area,
+          schedule,
+          "",
+          targetMembers.map((member) => member.submissionId).join("|"),
+          "pending",
+          ""
+        ].map(csvCell).join(","));
+      }
+
+      return [
+        submissionId,
+        submittedAt,
+        payload.direction,
+        area,
+        schedule,
+        studentNumber,
+        targetStudentNumbers.length > 0 ? "1" : "0",
+        connectionRequests,
+        "",
+        "",
+        "",
+        ""
+      ].map(csvCell).join(",");
+    });
 
   if (rows.length > 0) {
     await appendFile(submissionsFile, `${rows.join("\n")}\n`);
   }
 
+  if (newConnectionRequests.length > 0) {
+    await appendFile(connectionRequestsFile, `${newConnectionRequests.join("\n")}\n`);
+  }
+
   sendJson(response, 201, {
     ok: true,
     added: rows.length,
-    skippedDuplicates: payload.schedule.length - rows.length
+    skippedDuplicates: payload.schedule.length - rows.length,
+    pendingConnections: newConnectionRequests.length
   });
 }
 
