@@ -264,7 +264,6 @@ function renderRouteTable(container, routes, direction) {
   const visibleRoutes = routes.filter((route) => getScheduleDay(route.schedule) === selectedDay);
   const suburbs = [...new Set(visibleRoutes.map((route) => route.area))].sort((a, b) => a.localeCompare(b));
   const schedules = timeSlots.map((time) => `${selectedDay}@${time}`);
-  const routesByCell = new Map(visibleRoutes.map((route) => [`${route.area}|${route.schedule}`, route]));
   const counts = new Map(visibleRoutes.map((route) => [`${route.area}|${route.schedule}`, route.interested]));
   const maxInterest = Math.max(...routes.map((route) => route.interested), 1);
   const headerCells = schedules.map((schedule) => `<div class="heatmap-head"><span>${escapeHtml(formatScheduleTime(schedule))}</span></div>`).join("");
@@ -272,13 +271,11 @@ function renderRouteTable(container, routes, direction) {
     const cells = schedules.map((schedule) => {
       const count = counts.get(`${suburb}|${schedule}`) || 0;
       const level = count === 0 ? 0 : Math.max(1, Math.ceil((count / maxInterest) * 5));
-      const route = routesByCell.get(`${suburb}|${schedule}`);
-
-      if (!route) {
+      if (count === 0) {
         return `<div class="heatmap-cell heatmap-level-0" aria-label="${escapeHtml(suburb)}, ${escapeHtml(formatSchedule(schedule))}: no interests"></div>`;
       }
 
-      return `<button class="heatmap-cell heatmap-level-${level}" type="button" data-direction="${direction}" data-area="${escapeHtml(suburb)}" data-schedule="${escapeHtml(schedule)}" aria-label="${escapeHtml(suburb)}, ${escapeHtml(formatSchedule(schedule))}: ${count} interested">${count}</button>`;
+      return `<div class="heatmap-cell heatmap-level-${level}" aria-label="${escapeHtml(suburb)}, ${escapeHtml(formatSchedule(schedule))}: ${count} interested">${count}</div>`;
     }).join("");
 
     return `
@@ -298,7 +295,6 @@ function renderRouteTable(container, routes, direction) {
 
   container.innerHTML = `
     ${grid}
-    <div class="route-popup" hidden></div>
     <div class="day-tabs" role="tablist" aria-label="${direction === "to_uwc" ? "To UWC" : "From UWC"} route table day">
       ${days.map(([day, label]) => `
         <button class="day-tab" type="button" data-direction="${direction}" data-day="${day}" aria-selected="${day === selectedDay}">
@@ -314,37 +310,6 @@ function renderRouteTable(container, routes, direction) {
       renderRouteTable(container, routes, direction);
     });
   });
-
-  container.querySelectorAll(".heatmap-cell[data-schedule]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const route = routesByCell.get(`${button.dataset.area}|${button.dataset.schedule}`);
-      useRouteGroup(container, route);
-    });
-  });
-}
-
-function useRouteGroup(container, route) {
-  if (!route) return;
-
-  actionForm.elements.direction.value = route.direction;
-  actionForm.elements.area.value = route.area;
-  actionForm.elements.schedule.value = route.schedule;
-  actionForm.scrollIntoView({ behavior: "smooth", block: "start" });
-  setActionStatus(`${formatRoute(route)} selected. Enter your student or staff number, then add yourself to the pool.`, "success");
-
-  const popup = container.querySelector(".route-popup");
-  popup.hidden = false;
-  popup.innerHTML = `
-    <div>
-      <strong>${escapeHtml(formatRoute(route))}</strong>
-      <span>${escapeHtml(formatSchedule(route.schedule))}</span>
-    </div>
-    <p>${route.interested} pool interest${route.interested === 1 ? "" : "s"}.</p>
-  `;
-}
-
-function formatRoute(route) {
-  return route.direction === "to_uwc" ? `${route.area} to UWC` : `UWC to ${route.area}`;
 }
 
 function formatSchedule(schedule) {
