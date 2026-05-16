@@ -523,14 +523,31 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
         print()
         print("Sanity check: multi-person pools without pending consent")
         print("-------------------------------------------------------")
-        print("These are usually older rows or pools where nobody joined after the automatic workflow existed.")
         for index, group in enumerate(unattended_groups, start=1):
-            rows_in_group = group["rows"]
-            student_numbers = ", ".join(row.get("student_number", "") for row in rows_in_group)
+            requester = group["requester"]
+            targets = group["targets"]
+            target_numbers = [
+                normalize_student_number(row.get("student_number", ""))
+                for row in targets
+            ]
             print(
                 f"{index}. {format_direction(group['direction'])}, {group['area']}, "
-                f"{format_schedule(group['schedule'])}: {student_numbers}"
+                f"{format_schedule(group['schedule'])}"
             )
+            print(f"   Suggested requester: {requester.get('student_number', '')} ({requester.get('submitted_at', '')})")
+            print(f"   Targets: {', '.join(target_numbers)}")
+            if ask_yes_no("Start a consent request from the latest student to the earlier pool members?"):
+                result = client.patch_submission(requester["id"], {
+                    "status": "1",
+                    "connection_requests": normalize_connected_student_numbers("|".join(target_numbers)),
+                    "consent_response": "",
+                    "consent_responded_at": "",
+                })
+                print("Updated:")
+                print_table([result["submission"]])
+                if ask_yes_no("Generate this consent email now?"):
+                    print()
+                    print_consent_email(client, rows, requester["id"])
 
     if not any([pending_consent, approved_targets, rejected_requests, unattended_groups]):
         print()
@@ -569,21 +586,25 @@ def unrequested_multi_person_pools(
 
     groups = []
     for (direction, area_key, schedule), rows in by_pool.items():
-        student_numbers = {
-            normalize_student_number(row.get("student_number", ""))
-            for row in rows
-        }
+        rows_by_student = {}
+        for row in sorted(rows, key=lambda item: item.get("submitted_at", "")):
+            rows_by_student[normalize_student_number(row.get("student_number", ""))] = row
+        unique_rows = list(rows_by_student.values())
         has_pending = any(
             split_student_numbers(row.get("connection_requests", ""))
-            for row in rows
+            for row in unique_rows
         )
-        if len(student_numbers) < 2 or has_pending:
+        if len(unique_rows) < 2 or has_pending:
             continue
+        sorted_rows = sorted(unique_rows, key=lambda item: item.get("submitted_at", ""))
+        requester = sorted_rows[-1]
         groups.append({
             "direction": direction,
-            "area": display_area(area_key, rows),
+            "area": display_area(area_key, sorted_rows),
             "schedule": schedule,
-            "rows": sorted(rows, key=lambda item: item.get("submitted_at", "")),
+            "requester": requester,
+            "targets": sorted_rows[:-1],
+            "rows": sorted_rows,
         })
 
     return sorted(
