@@ -156,7 +156,7 @@ async function handleSubmission(request, response) {
   const studentNumber = normalizeStudentNumber(payload.studentNumber);
   const area = normalizeArea(payload.area);
   const existingKeys = new Set(submissions.flatMap(submissionInterestKeys));
-  const submittedAt = new Date().toISOString();
+  const submittedAt = localTimestamp();
   const newConnectionRequests = [];
   const rows = [...new Set(payload.schedule)]
     .filter((schedule) => isScheduleCell(schedule))
@@ -343,7 +343,7 @@ async function handleConnectionRequest(request, response) {
 
   const row = [
     createConnectionRequestId(),
-    new Date().toISOString(),
+    localTimestamp(),
     studentNumber,
     payload.direction,
     area,
@@ -389,7 +389,7 @@ async function handleConsentResponse(url, response) {
   submissions[index] = {
     ...submissions[index],
     consent_response: answer,
-    consent_responded_at: new Date().toISOString()
+    consent_responded_at: localTimestamp()
   };
   await writeSubmissions(submissions);
 
@@ -742,6 +742,22 @@ function createConnectionRequestId() {
 
 function createConsentToken() {
   return randomBytes(24).toString("hex");
+}
+
+function localTimestamp(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const milliseconds = String(date.getMilliseconds()).padStart(3, "0");
+  return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}:${values.second}.${milliseconds} SAST`;
 }
 
 async function readSubmissions() {

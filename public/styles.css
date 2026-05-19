@@ -1,14 +1,16 @@
 :root {
   color-scheme: light;
-  --ink: #17201b;
-  --muted: #5c665f;
-  --line: #cdd8d1;
-  --paper: #f7faf7;
+  --ink: #111827;
+  --muted: #5d6675;
+  --line: #d6deea;
+  --paper: #f3f6fb;
   --surface: #ffffff;
-  --accent: #0a7c66;
-  --accent-dark: #075846;
-  --warn: #9b3d1c;
-  --focus: #f0c84b;
+  --accent: #123b79;
+  --accent-dark: #08275a;
+  --gold: #c6a44c;
+  --soft-blue: #eef4ff;
+  --warn: #a54822;
+  --focus: #e9c757;
 }
 
 * {
@@ -17,6 +19,7 @@
 
 body {
   margin: 0;
+  overflow-x: hidden;
   background: var(--paper);
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
@@ -24,13 +27,26 @@ body {
 }
 
 .shell {
-  width: min(100%, 920px);
+  width: min(100%, 1060px);
   margin: 0 auto;
-  padding: 24px 14px 48px;
+  padding: 24px 16px 56px;
 }
 
 .intro {
-  padding: 8px 0 18px;
+  display: grid;
+  grid-template-columns: 94px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  padding: 10px 0 20px;
+}
+
+.uwc-logo {
+  width: 94px;
+  height: 94px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  object-fit: contain;
 }
 
 .eyebrow {
@@ -43,7 +59,9 @@ body {
 
 h1 {
   margin: 0;
-  font-size: clamp(2rem, 8vw, 4rem);
+  color: var(--accent-dark);
+  font-size: clamp(2.1rem, 7vw, 4.1rem);
+  line-height: 0.98;
   letter-spacing: 0;
 }
 
@@ -76,8 +94,8 @@ h3 {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 8px 28px rgb(23 32 27 / 0.08);
+  padding: 18px;
+  box-shadow: 0 10px 30px rgb(17 24 39 / 0.08);
 }
 
 .popular-routes,
@@ -143,7 +161,7 @@ h3 {
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #f8fbf9;
+  background: var(--soft-blue);
   text-align: right;
 }
 
@@ -194,10 +212,10 @@ label {
   display: grid;
   gap: 8px;
   border: 1px solid var(--line);
-  border-left: 4px solid var(--accent);
+  border-left: 4px solid var(--gold);
   border-radius: 6px;
   padding: 12px;
-  background: #f8fbf9;
+  background: #fffdf6;
 }
 
 .privacy-notice h2 {
@@ -251,7 +269,8 @@ textarea,
 select {
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 12px;
+  min-height: 48px;
+  padding: 11px 12px;
   background: #fff;
   color: var(--ink);
 }
@@ -415,7 +434,7 @@ button:disabled {
 }
 
 .action-buttons {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .secondary-action {
@@ -437,18 +456,24 @@ button:disabled {
 .route-columns {
   display: grid;
   gap: 24px;
+  min-width: 0;
 }
 
 .route-columns section {
   display: grid;
   gap: 14px;
+  min-width: 0;
   align-content: start;
   border-top: 3px solid var(--accent);
   padding-top: 14px;
 }
 
+.route-list {
+  min-width: 0;
+}
+
 .route-columns > section + section {
-  border-top-color: var(--warn);
+  border-top-color: var(--gold);
 }
 
 .heatmap-wrap {
@@ -457,6 +482,7 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
+  -webkit-overflow-scrolling: touch;
 }
 
 .heatmap-grid {
@@ -480,7 +506,7 @@ button:disabled {
 .heatmap-corner,
 .heatmap-head,
 .heatmap-suburb {
-  background: #f8fbf9;
+  background: var(--soft-blue);
   font-size: 0.84rem;
   font-weight: 800;
 }
@@ -507,41 +533,25 @@ button:disabled {
   font-weight: 800;
 }
 
-button.heatmap-cell {
-  width: 100%;
-  min-height: 34px;
-  border: 0;
-  border-right: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  padding: 4px;
-  cursor: pointer;
-}
-
-button.heatmap-cell:hover,
-button.heatmap-cell:focus-visible {
-  box-shadow: inset 0 0 0 3px var(--focus);
-}
-
 .heatmap-level-0 {
   background: #fff;
   color: transparent;
 }
 
 .heatmap-level-1 {
-  background: #dff1e9;
+  background: #e8f1ff;
 }
 
 .heatmap-level-2 {
-  background: #bde3d5;
+  background: #c9ddff;
 }
 
 .heatmap-level-3 {
-  background: #83c9b3;
+  background: #84aee8;
 }
 
 .heatmap-level-4 {
-  background: #3fa98f;
+  background: #3c6eb5;
   color: #fff;
 }
 
@@ -559,6 +569,7 @@ button.heatmap-cell:focus-visible {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
+  min-width: 0;
 }
 
 .day-tab {
@@ -578,44 +589,38 @@ button.heatmap-cell:focus-visible {
   color: #fff;
 }
 
-.route-popup {
-  display: grid;
-  gap: 8px;
-  margin-top: 10px;
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--accent);
-  border-radius: 6px;
-  padding: 12px;
-  background: #f8fbf9;
-}
-
-.route-popup[hidden] {
-  display: none;
-}
-
-.route-popup div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  justify-content: space-between;
-}
-
-.route-popup p {
-  margin: 0;
-  color: var(--muted);
-  font-weight: 700;
-}
-
-.route-popup .use-group {
-  width: auto;
-  min-height: 40px;
-  justify-self: start;
-  padding: 8px 12px;
-}
-
-@media (max-width: 680px) {
+@media (max-width: 780px) {
   .shell {
-    padding-inline: 10px;
+    padding: 14px 10px 40px;
+  }
+
+  .intro {
+    grid-template-columns: 68px minmax(0, 1fr);
+    gap: 12px;
+    padding-bottom: 10px;
+  }
+
+  .uwc-logo {
+    width: 68px;
+    height: 68px;
+  }
+
+  .eyebrow {
+    margin-bottom: 5px;
+    font-size: 0.72rem;
+  }
+
+  h1 {
+    font-size: clamp(1.8rem, 9vw, 2.9rem);
+  }
+
+  h2 {
+    font-size: 1.32rem;
+  }
+
+  .lede {
+    margin-top: 7px;
+    font-size: 0.98rem;
   }
 
   .connect-section,
@@ -649,12 +654,24 @@ button.heatmap-cell:focus-visible {
   }
 
   .heatmap-grid {
-    min-width: 0;
+    min-width: max-content;
+  }
+
+  .heatmap-wrap {
+    margin-inline: -12px;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+    max-width: calc(100% + 24px);
   }
 
   .heatmap-corner,
   .heatmap-suburb {
     font-size: 0.78rem;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    box-shadow: 1px 0 0 var(--line);
   }
 
   .heatmap-corner,
@@ -662,5 +679,38 @@ button.heatmap-cell:focus-visible {
   .heatmap-suburb,
   .heatmap-cell {
     padding: 3px;
+  }
+
+  .day-tabs {
+    gap: 4px;
+  }
+
+  .day-tab {
+    min-height: 42px;
+    padding-inline: 4px;
+  }
+}
+
+@media (max-width: 420px) {
+  .intro {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .uwc-logo {
+    width: 56px;
+    height: 56px;
+  }
+
+  .popular-routes,
+  .pool-lookup-section,
+  .connect-section {
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+    margin-inline: -10px;
+  }
+
+  .route-columns section {
+    gap: 10px;
   }
 }
