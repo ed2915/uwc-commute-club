@@ -249,12 +249,13 @@ async function loadPopularRoutes() {
 function renderPopularRoutes(routes) {
   const toRoutes = routes.filter((route) => route.direction === "to_uwc");
   const fromRoutes = routes.filter((route) => route.direction === "from_uwc");
+  const maxInterest = Math.max(...routes.map((route) => route.interested), 1);
 
-  renderRouteTable(toUwcRoutes, toRoutes, "to_uwc");
-  renderRouteTable(fromUwcRoutes, fromRoutes, "from_uwc");
+  renderRouteTable(toUwcRoutes, toRoutes, "to_uwc", maxInterest);
+  renderRouteTable(fromUwcRoutes, fromRoutes, "from_uwc", maxInterest);
 }
 
-function renderRouteTable(container, routes, direction) {
+function renderRouteTable(container, routes, direction, maxInterest) {
   if (routes.length === 0) {
     container.innerHTML = `<p class="empty-routes">No pools yet.</p>`;
     return;
@@ -265,7 +266,6 @@ function renderRouteTable(container, routes, direction) {
   const suburbs = [...new Set(visibleRoutes.map((route) => route.area))].sort((a, b) => a.localeCompare(b));
   const schedules = timeSlots.map((time) => `${selectedDay}@${time}`);
   const counts = new Map(visibleRoutes.map((route) => [`${route.area}|${route.schedule}`, route.interested]));
-  const maxInterest = Math.max(...routes.map((route) => route.interested), 1);
   const headerCells = schedules.map((schedule) => `<div class="heatmap-head"><span>${escapeHtml(formatScheduleTime(schedule))}</span></div>`).join("");
   const rows = suburbs.map((suburb) => {
     const cells = schedules.map((schedule) => {
@@ -307,7 +307,7 @@ function renderRouteTable(container, routes, direction) {
   container.querySelectorAll(".day-tab").forEach((button) => {
     button.addEventListener("click", () => {
       selectedHeatmapDays[button.dataset.direction] = button.dataset.day;
-      renderRouteTable(container, routes, direction);
+      renderRouteTable(container, routes, direction, maxInterest);
     });
   });
 }
