@@ -12,6 +12,9 @@ const connectionRequestsFile = join(dataDir, "connection_requests.csv");
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || (process.env.RENDER ? "0.0.0.0" : "127.0.0.1");
 const adminToken = process.env.ADMIN_TOKEN || "";
+const rateLimitWindowMs = 10 * 60 * 1000;
+const rateLimitMaxRequests = 30;
+const publicPostRateLimits = new Map();
 
 const csvHeaders = [
   "id",
@@ -56,6 +59,11 @@ await ensureConnectionRequestsFile();
 createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host}`);
+
+    if (isPublicWriteRequest(request, url) && isRateLimited(request)) {
+      sendJson(response, 429, { error: "Please wait a moment before trying again." });
+      return;
+    }
 
     if (request.method === "POST" && url.pathname === "/api/submissions") {
       await handleSubmission(request, response);
@@ -145,6 +153,17 @@ async function ensureConnectionRequestsFile() {
 
 async function handleSubmission(request, response) {
   const payload = await readRequestJson(request);
+
+  if (isLikelyBotPayload(payload)) {
+    sendJson(response, 201, {
+      ok: true,
+      added: 1,
+      skippedDuplicates: 0,
+      pendingConnections: 0
+    });
+    return;
+  }
+
   const validationError = validateSubmission(payload);
 
   if (validationError) {
@@ -237,6 +256,11 @@ function validateSubmission(payload) {
 
 async function handleRemoveStudentNumber(request, response) {
   const payload = await readRequestJson(request);
+
+  if (isLikelyBotPayload(payload)) {
+    sendJson(response, 200, { ok: true, deleted: 0 });
+    return;
+  }
 
   if (!isValidStudentNumber(payload.studentNumber)) {
     sendJson(response, 400, { error: "Enter a valid student or staff number" });
@@ -367,6 +391,39 @@ function validateConnectionRequest(payload) {
   if (!isScheduleCell(payload.schedule)) return "Choose a valid day and time";
   if (payload.connectionConsent !== true) return "Consent is required before requesting a connection";
   return "";
+}
+
+function isLikelyBotPayload(payload) {
+  return Boolean(payload && typeof payload === "object" && String(payload.website || "").trim());
+}
+
+function isPublicWriteRequest(request, url) {
+  return request.method === "POST" && [
+    "/api/submissions",
+    "/api/remove-student-number",
+    "/api/connection-requests"
+  ].includes(url.pathname);
+}
+
+function isRateLimited(request) {
+  const now = Date.now();
+  const key = clientRateLimitKey(request);
+  const hits = (publicPostRateLimits.get(key) || []).filter((timestamp) => now - timestamp < rateLimitWindowMs);
+  hits.push(now);
+  publicPostRateLimits.set(key, hits);
+
+  for (const [storedKey, timestamps] of publicPostRateLimits) {
+    const recent = timestamps.filter((timestamp) => now - timestamp < rateLimitWindowMs);
+    if (recent.length === 0) publicPostRateLimits.delete(storedKey);
+    else if (recent.length !== timestamps.length) publicPostRateLimits.set(storedKey, recent);
+  }
+
+  return hits.length > rateLimitMaxRequests;
+}
+
+function clientRateLimitKey(request) {
+  const forwardedFor = String(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return forwardedFor || request.socket.remoteAddress || "unknown";
 }
 
 async function handleConsentResponse(url, response) {

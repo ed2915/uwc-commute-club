@@ -144,6 +144,7 @@ function selectedRoutePayload() {
     area: clean(formData.get("area")),
     schedule: formData.get("schedule"),
     studentNumber: normalizeStudentNumber(formData.get("studentNumber")),
+    website: clean(formData.get("website")),
     consent: formData.get("consent") === "yes"
   };
 }

@@ -189,6 +189,15 @@ h3 {
   text-transform: uppercase;
 }
 
+.honeypot-field {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
 fieldset {
   min-width: 0;
   margin: 0;
