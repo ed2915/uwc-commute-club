@@ -156,6 +156,13 @@ h3 {
   justify-content: space-between;
 }
 
+.route-metrics {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .user-count {
   min-width: 116px;
   padding: 8px 10px;
@@ -643,8 +650,13 @@ button:disabled {
     align-items: start;
   }
 
-  .user-count {
+  .route-metrics {
     width: 100%;
+    justify-content: stretch;
+  }
+
+  .user-count {
+    flex: 1 1 132px;
     text-align: left;
   }
 

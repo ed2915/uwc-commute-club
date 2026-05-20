@@ -37,6 +37,7 @@ const actionStatusMessage = document.querySelector("#actionStatus");
 const toUwcRoutes = document.querySelector("#toUwcRoutes");
 const fromUwcRoutes = document.querySelector("#fromUwcRoutes");
 const uniqueUserCount = document.querySelector("#uniqueUserCount");
+const poolInterestCount = document.querySelector("#poolInterestCount");
 const studentNumberInput = actionForm.elements.studentNumber;
 const addInterestButton = document.querySelector("#addInterest");
 const removeInterestButton = document.querySelector("#removeInterest");
@@ -238,9 +239,11 @@ async function loadPopularRoutes() {
     const response = await fetch("/api/popular-routes");
     const result = await response.json();
     uniqueUserCount.textContent = String(result.uniqueUsers || 0);
+    poolInterestCount.textContent = String(result.poolInterests || 0);
     renderPopularRoutes(result.routes || []);
   } catch {
     uniqueUserCount.textContent = "0";
+    poolInterestCount.textContent = "0";
     toUwcRoutes.innerHTML = `<p class="empty-routes">Popular pools could not be loaded.</p>`;
     fromUwcRoutes.innerHTML = `<p class="empty-routes">Popular pools could not be loaded.</p>`;
   }

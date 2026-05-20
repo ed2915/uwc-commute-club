@@ -382,6 +382,11 @@ def print_consent_email(
     print()
     print(f"Pool: {format_direction(row['direction'])}, {row['area']}, {format_schedule(row['schedule'])}")
     print()
+    print_safety_and_responsibility_note()
+    print()
+    print("If you select Yes, your UWC student email address may be shared with the relevant students in this pool, and they may contact you directly.")
+    print("The organisers will not supervise those conversations or any arrangements that follow.")
+    print()
     print(f"Yes, I consent: {yes_link}")
     print(f"No, I do not consent: {no_link}")
     print()
@@ -424,6 +429,8 @@ def print_target_emails(
         print()
         print("You are not required to respond if you do not want to.")
         print()
+        print_safety_and_responsibility_note()
+        print()
         print("Thank you.")
 
     if not apply:
@@ -435,6 +442,17 @@ def print_target_emails(
     print()
     print("Updated after sent emails:")
     print_table([result["submission"]])
+
+
+def print_safety_and_responsibility_note() -> None:
+    print("Safety and responsibility note")
+    print()
+    print("UWC Commute Club only helps students identify others who have expressed interest in similar commute pools.")
+    print("The organisers do not arrange, supervise, endorse, or take responsibility for any private discussions, travel arrangements, payments, lifts, meetings, or other decisions made between students after contact details are shared.")
+    print()
+    print("Please use ordinary safety precautions when contacting or travelling with others. For example: meet or discuss arrangements in a public or university setting first; do not share unnecessary personal information; tell someone you trust about any planned lift or meeting; check details carefully before travelling; avoid arrangements that make you uncomfortable; and stop communication if anything feels unsafe or inappropriate.")
+    print()
+    print("Participation is voluntary. You remain responsible for deciding whether to communicate with, meet, or travel with anyone in a pool. You can remove yourself from a pool at any time using the webpage.")
 
 
 def apply_target_emails_sent(

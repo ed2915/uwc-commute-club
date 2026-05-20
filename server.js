@@ -403,11 +403,13 @@ async function handlePopularRoutes(response) {
   const submissions = await readSubmissions();
   const routeMap = new Map();
   const countedKeys = new Set();
+  const uniqueUserKeys = new Set();
 
   for (const submission of submissions) {
     const area = normalizeArea(submission.area);
     if (!isActiveStatus(submission.status)) continue;
     if (!area || !["to_uwc", "from_uwc"].includes(submission.direction)) continue;
+    uniqueUserKeys.add(submissionIdentityKey(submission));
 
     for (const schedule of scheduleCells(submission)) {
       const countedKey = interestKey({ ...submission, area, schedule });
@@ -432,7 +434,7 @@ async function handlePopularRoutes(response) {
   const routes = [...routeMap.values()]
     .sort((a, b) => b.interested - a.interested || a.start.localeCompare(b.start));
 
-  sendJson(response, 200, { routes, uniqueUsers: countedKeys.size });
+  sendJson(response, 200, { routes, poolInterests: countedKeys.size, uniqueUsers: uniqueUserKeys.size });
 }
 
 async function handleStudentPools(url, response) {
