@@ -86,9 +86,11 @@ h3 {
   font-size: 1.1rem;
 }
 
+.service-preamble,
 .popular-routes,
 .pool-lookup-section,
-.connect-section {
+.connect-section,
+.contact-section {
   display: grid;
   gap: 18px;
   background: var(--surface);
@@ -98,10 +100,33 @@ h3 {
   box-shadow: 0 10px 30px rgb(17 24 39 / 0.08);
 }
 
+.service-preamble,
 .popular-routes,
 .pool-lookup-section,
-.connect-section {
+.connect-section,
+.contact-section {
   margin-top: 18px;
+}
+
+.service-preamble {
+  gap: 10px;
+  border-left: 4px solid var(--accent);
+}
+
+.service-preamble p,
+.contact-section p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.contact-section {
+  gap: 8px;
+}
+
+.contact-section a {
+  color: var(--accent-dark);
+  font-weight: 800;
 }
 
 .connect-form,
@@ -641,7 +666,9 @@ button:disabled {
 
   .connect-section,
   .pool-lookup-section,
-  .popular-routes {
+  .popular-routes,
+  .service-preamble,
+  .contact-section {
     padding: 12px;
   }
 
@@ -724,7 +751,9 @@ button:disabled {
 
   .popular-routes,
   .pool-lookup-section,
-  .connect-section {
+  .connect-section,
+  .service-preamble,
+  .contact-section {
     border-right: 0;
     border-left: 0;
     border-radius: 0;

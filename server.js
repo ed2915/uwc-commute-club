@@ -60,7 +60,7 @@ createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host}`);
 
-    if (isPublicWriteRequest(request, url) && isRateLimited(request)) {
+    if (isPublicWriteRequest(request, url) && isRateLimited(request, url)) {
       sendJson(response, 429, { error: "Please wait a moment before trying again." });
       return;
     }
@@ -155,6 +155,7 @@ async function handleSubmission(request, response) {
   const payload = await readRequestJson(request);
 
   if (isLikelyBotPayload(payload)) {
+    logSecurityEvent(request, "honeypot", { path: "/api/submissions" });
     sendJson(response, 201, {
       ok: true,
       added: 1,
@@ -258,6 +259,7 @@ async function handleRemoveStudentNumber(request, response) {
   const payload = await readRequestJson(request);
 
   if (isLikelyBotPayload(payload)) {
+    logSecurityEvent(request, "honeypot", { path: "/api/remove-student-number" });
     sendJson(response, 200, { ok: true, deleted: 0 });
     return;
   }
@@ -316,6 +318,13 @@ async function handleRemoveStudentNumber(request, response) {
 
 async function handleConnectionRequest(request, response) {
   const payload = await readRequestJson(request);
+
+  if (isLikelyBotPayload(payload)) {
+    logSecurityEvent(request, "honeypot", { path: "/api/connection-requests" });
+    sendJson(response, 201, { ok: true, requested: 0 });
+    return;
+  }
+
   const validationError = validateConnectionRequest(payload);
 
   if (validationError) {
@@ -405,7 +414,7 @@ function isPublicWriteRequest(request, url) {
   ].includes(url.pathname);
 }
 
-function isRateLimited(request) {
+function isRateLimited(request, url) {
   const now = Date.now();
   const key = clientRateLimitKey(request);
   const hits = (publicPostRateLimits.get(key) || []).filter((timestamp) => now - timestamp < rateLimitWindowMs);
@@ -418,12 +427,32 @@ function isRateLimited(request) {
     else if (recent.length !== timestamps.length) publicPostRateLimits.set(storedKey, recent);
   }
 
-  return hits.length > rateLimitMaxRequests;
+  const limited = hits.length > rateLimitMaxRequests;
+  if (limited) {
+    logSecurityEvent(request, "rate_limit", {
+      path: url.pathname,
+      hits: hits.length,
+      windowMinutes: rateLimitWindowMs / 60000
+    });
+  }
+
+  return limited;
 }
 
 function clientRateLimitKey(request) {
   const forwardedFor = String(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
   return forwardedFor || request.socket.remoteAddress || "unknown";
+}
+
+function logSecurityEvent(request, eventType, details = {}) {
+  console.warn(JSON.stringify({
+    event: "security",
+    eventType,
+    timestamp: localTimestamp(),
+    ip: clientRateLimitKey(request),
+    userAgent: String(request.headers["user-agent"] || ""),
+    ...details
+  }));
 }
 
 async function handleConsentResponse(url, response) {
