@@ -1,0 +1,28 @@
+UWC Commute Club
+
+As the second semester begins, students and staff are invited to use the UWC
+Commute Club to find others travelling to or from campus from similar areas and
+at similar times.
+
+The service allows UWC commuters to indicate their suburb, travel direction and
+usual travel times. It then shows where commute pools are forming, using
+aggregate counts only. Individual details are not shown publicly, and contact
+details are not shared automatically.
+
+By making shared commute interests more visible, the UWC Commute Club can help
+students and staff explore possible lift clubs, reduce fuel costs, and
+contribute to a greener, quieter campus with fewer cars on the road.
+
+Join at least one commute pool and stand a chance to win a R1,000 fuel voucher.
+All current UWC students and staff with at least one active pool on 15 August
+2026 will be entered. One entry per person. The draw closes at 23:59 SAST on
+15 August 2026, and the winner will be selected at random on 21 August 2026.
+Joining the draw does not require consenting to contact-detail sharing.
+
+Full draw rules:
+https://uwc-commute-club.onrender.com/draw-rules.html
+
+Users can check which pools they have joined and remove themselves at any time.
+
+Access the service here:
+https://uwc-commute-club.onrender.com
