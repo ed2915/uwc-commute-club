@@ -27,6 +27,7 @@ const csvHeaders = [
   "connection_requests",
   "connected_student_numbers",
   "consent_token",
+  "consent_email_sent_at",
   "consent_response",
   "consent_responded_at",
 ];
@@ -224,6 +225,7 @@ async function handleSubmission(request, response) {
         "",
         "",
         "",
+        "",
         ""
       ].map(csvCell).join(",");
     });
@@ -369,6 +371,7 @@ async function handleConnectionRequest(request, response) {
         ...splitStudentNumberList(submission.connection_requests),
         ...targetStudentNumbers
       ]),
+      consent_email_sent_at: "",
       consent_response: "",
       consent_responded_at: ""
     };
@@ -676,6 +679,7 @@ function validateAdminPatch(payload) {
     "connection_requests",
     "connected_student_numbers",
     "consent_token",
+    "consent_email_sent_at",
     "consent_response",
     "consent_responded_at",
   ]);

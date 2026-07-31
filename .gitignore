@@ -2,3 +2,7 @@ node_modules/
 data/*.csv
 .DS_Store
 folder_notes.txt
+consent_email.txt
+reports/*.png
+reports/*.pdf
+reports/*.svg

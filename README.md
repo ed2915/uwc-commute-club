@@ -80,6 +80,30 @@ certificate installer or add `--insecure` to the command on your own machine.
 Set a private `ADMIN_TOKEN` environment variable on the Render service before using the tool.
 The admin endpoints return 404 until `ADMIN_TOKEN` is configured.
 
+## Participation Chart
+
+Activate the Python environment containing Matplotlib, set `UWC_ADMIN_TOKEN`,
+and generate an aggregate day-by-day chart from the live Render database:
+
+```sh
+source ~/myenv/bin/activate
+python3 tools/plot_participation.py --insecure
+```
+
+The default output is `reports/participation_over_time.png`. Limit the displayed
+period or choose another output format with:
+
+```sh
+python3 tools/plot_participation.py --insecure \
+  --start 2026-08-01 \
+  --end 2026-08-31 \
+  --output reports/august_participation.pdf
+```
+
+The report contains aggregate counts only. It does not save student or staff
+numbers. Because removed pool interests are deleted from the active database,
+the script cannot reconstruct participation that was subsequently removed.
+
 ## Captured Fields
 
 - Travelling to UWC or from UWC
@@ -119,3 +143,12 @@ for organiser review. No contact details are shared automatically. The
 numbers to the requester. After the requester consents and the organiser sends
 the target emails, `target-emails --apply` moves those numbers into
 `connected_student_numbers` and marks the requester row as status `2`.
+
+When `review-actions` generates a consent email, it also writes the complete
+message to `consent_email.txt` in the project directory. After the organiser
+confirms that the email was sent, the script records `consent_email_sent_at`.
+It will not generate another consent email for that submission, or another
+pending submission belonging to the same person, while a response is still
+outstanding. The local text file is removed after sending is confirmed so it
+does not become an extra retained copy. An intentional manual resend requires
+`consent-email ID --force`.

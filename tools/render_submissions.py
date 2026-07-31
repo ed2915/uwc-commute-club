@@ -8,15 +8,19 @@ from collections import defaultdict
 from datetime import datetime, timezone
 import json
 import os
+from pathlib import Path
 import secrets
 import ssl
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
 
 
 DEFAULT_BASE_URL = "https://uwc-commute-club.onrender.com"
+CONSENT_EMAIL_FILE = Path(__file__).resolve().parent.parent / "consent_email.txt"
+SAST = ZoneInfo("Africa/Johannesburg")
 FIELDS = [
     "id",
     "submitted_at",
@@ -28,6 +32,7 @@ FIELDS = [
     "connection_requests",
     "connected_student_numbers",
     "consent_token",
+    "consent_email_sent_at",
     "consent_response",
     "consent_responded_at",
 ]
@@ -103,6 +108,7 @@ def main() -> int:
         help="Pipe-separated 6- or 7-digit student/staff numbers already connected with this row.",
     )
     patch_parser.add_argument("--consent-token")
+    patch_parser.add_argument("--consent-email-sent-at")
     patch_parser.add_argument("--consent-response", choices=["", "yes", "no"])
     patch_parser.add_argument("--consent-responded-at")
 
@@ -156,6 +162,11 @@ def main() -> int:
         help="Generate email text with yes/no consent links for a connection request row.",
     )
     consent_parser.add_argument("id", help="Submission id with status 1 and connection_requests.")
+    consent_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate an email that was already marked as sent.",
+    )
 
     target_parser = subparsers.add_parser(
         "target-emails",
@@ -250,7 +261,8 @@ def main() -> int:
                     print(f"Updated {row['id']}")
         elif args.command == "consent-email":
             submissions = client.list_submissions()
-            print_consent_email(client, submissions, args.id)
+            row = write_consent_email(client, submissions, args.id, force=args.force)
+            confirm_consent_email_sent(client, row["id"])
         elif args.command == "target-emails":
             submissions = client.list_submissions()
             print_target_emails(client, submissions, args.id, apply=args.apply)
@@ -343,21 +355,48 @@ def build_patch(args: argparse.Namespace) -> dict[str, str]:
         patch["connected_student_numbers"] = normalize_connected_student_numbers(
             args.connected_student_numbers
         )
-    for field in ["consent_token", "consent_response", "consent_responded_at"]:
+    for field in [
+        "consent_token",
+        "consent_email_sent_at",
+        "consent_response",
+        "consent_responded_at",
+    ]:
         value = getattr(args, field)
         if value is not None:
             patch[field] = value
     return patch
 
 
-def print_consent_email(
+def write_consent_email(
     client: AdminClient,
     submissions: list[dict[str, str]],
     submission_id: str,
-) -> None:
+    force: bool = False,
+) -> dict[str, str]:
     row = find_submission(submissions, submission_id)
     if row.get("status") != "1" or not row.get("connection_requests"):
         raise AdminError("Consent email requires a row with status 1 and connection_requests.")
+    if row.get("consent_response"):
+        raise AdminError("This consent request already has a recorded response.")
+    if row.get("consent_email_sent_at") and not row.get("consent_response") and not force:
+        raise AdminError(
+            "Consent email was already marked as sent at "
+            f"{row['consent_email_sent_at']}. Use --force only for an intentional resend."
+        )
+    student_number = normalize_student_number(row.get("student_number", ""))
+    other_awaiting = next((
+        other for other in submissions
+        if other.get("id") != row.get("id")
+        and normalize_student_number(other.get("student_number", "")) == student_number
+        and other.get("consent_email_sent_at")
+        and not other.get("consent_response")
+        and split_student_numbers(other.get("connection_requests", ""))
+    ), None)
+    if other_awaiting and not force:
+        raise AdminError(
+            "This person already has another consent email awaiting a response "
+            f"(submission {other_awaiting['id']})."
+        )
 
     token = row.get("consent_token")
     if not token:
@@ -369,28 +408,34 @@ def print_consent_email(
     yes_link = f"{base_url}/consent?token={quote(token, safe='')}&answer=yes"
     no_link = f"{base_url}/consent?token={quote(token, safe='')}&answer=no"
     to_email = student_email(row["student_number"])
-
-    print(f"To: {to_email}")
-    print("Subject: UWC Commute Club pool contact request")
+    text = "\n".join([
+        f"To: {to_email}",
+        "Subject: UWC Commute Club pool contact request",
+        "",
+        "Hello,",
+        "",
+        "You asked to connect with other people in one of your UWC Commute Club pools.",
+        "Before your UWC email address is shared, please choose one of the options below.",
+        "The student/staff numbers of the other people in the pool are not shown in this email.",
+        "You will remain in this pool until you remove yourself via the webpage, so you may receive future connection requests for it.",
+        "",
+        f"Pool: {format_direction(row['direction'])}, {row['area']}, {format_schedule(row['schedule'])}",
+        "",
+        safety_and_responsibility_text(),
+        "",
+        "If you select Yes, your UWC student email address may be shared with the relevant students in this pool, and they may contact you directly.",
+        "The organisers will not supervise those conversations or any arrangements that follow.",
+        "",
+        f"Yes, I consent: {yes_link}",
+        f"No, I do not consent: {no_link}",
+        "",
+        "Thank you.",
+    ])
+    CONSENT_EMAIL_FILE.write_text(f"{text}\n", encoding="utf-8")
+    print(text)
     print()
-    print("Hello,")
-    print()
-    print("You asked to connect with other people in one of your UWC Commute Club pools.")
-    print("Before your UWC email address is shared, please choose one of the options below.")
-    print("The student/staff numbers of the other people in the pool are not shown in this email.")
-    print("You will remain in this pool until you remove yourself via the webpage, so you may receive future connection requests for it.")
-    print()
-    print(f"Pool: {format_direction(row['direction'])}, {row['area']}, {format_schedule(row['schedule'])}")
-    print()
-    print_safety_and_responsibility_note()
-    print()
-    print("If you select Yes, your UWC student email address may be shared with the relevant students in this pool, and they may contact you directly.")
-    print("The organisers will not supervise those conversations or any arrangements that follow.")
-    print()
-    print(f"Yes, I consent: {yes_link}")
-    print(f"No, I do not consent: {no_link}")
-    print()
-    print("Thank you.")
+    print(f"Saved consent email to: {CONSENT_EMAIL_FILE}")
+    return row
 
 
 def print_target_emails(
@@ -445,14 +490,41 @@ def print_target_emails(
 
 
 def print_safety_and_responsibility_note() -> None:
-    print("Safety and responsibility note")
-    print()
-    print("UWC Commute Club only helps students identify others who have expressed interest in similar commute pools.")
-    print("The organisers do not arrange, supervise, endorse, or take responsibility for any private discussions, travel arrangements, payments, lifts, meetings, or other decisions made between students after contact details are shared.")
-    print()
-    print("Please use ordinary safety precautions when contacting or travelling with others. For example: meet or discuss arrangements in a public or university setting first; do not share unnecessary personal information; tell someone you trust about any planned lift or meeting; check details carefully before travelling; avoid arrangements that make you uncomfortable; and stop communication if anything feels unsafe or inappropriate.")
-    print()
-    print("Participation is voluntary. You remain responsible for deciding whether to communicate with, meet, or travel with anyone in a pool. You can remove yourself from a pool at any time using the webpage.")
+    print(safety_and_responsibility_text())
+
+
+def safety_and_responsibility_text() -> str:
+    return "\n".join([
+        "Safety and responsibility note",
+        "",
+        "UWC Commute Club only helps students identify others who have expressed interest in similar commute pools.",
+        "The organisers do not arrange, supervise, endorse, or take responsibility for any private discussions, travel arrangements, payments, lifts, meetings, or other decisions made between students after contact details are shared.",
+        "",
+        "Please use ordinary safety precautions when contacting or travelling with others. For example: meet or discuss arrangements in a public or university setting first; do not share unnecessary personal information; tell someone you trust about any planned lift or meeting; check details carefully before travelling; avoid arrangements that make you uncomfortable; and stop communication if anything feels unsafe or inappropriate.",
+        "",
+        "Participation is voluntary. You remain responsible for deciding whether to communicate with, meet, or travel with anyone in a pool. You can remove yourself from a pool at any time using the webpage.",
+    ])
+
+
+def local_timestamp() -> str:
+    now = datetime.now(SAST)
+    return f"{now.strftime('%Y-%m-%d %H:%M:%S')}.{now.microsecond // 1000:03d} SAST"
+
+
+def confirm_consent_email_sent(client: AdminClient, submission_id: str) -> bool:
+    if not ask_yes_no("Have you sent this consent email?"):
+        print("Not marked as sent. The file will be offered again during the next review.")
+        return False
+
+    sent_at = local_timestamp()
+    result = client.patch_submission(submission_id, {
+        "consent_email_sent_at": sent_at,
+    })
+    CONSENT_EMAIL_FILE.unlink(missing_ok=True)
+    print(f"Marked as sent at {sent_at}.")
+    print(f"Removed local consent email file: {CONSENT_EMAIL_FILE}")
+    print_table([result["submission"]])
+    return True
 
 
 def apply_target_emails_sent(
@@ -471,12 +543,33 @@ def apply_target_emails_sent(
 
 def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> None:
     rows = [normalize_submission(row) for row in submissions]
-    pending_consent = [
+    awaiting_consent = [
         row for row in rows
         if row.get("status") == "1"
         and split_student_numbers(row.get("connection_requests", ""))
         and not row.get("consent_response")
+        and row.get("consent_email_sent_at")
     ]
+    consent_candidates = [
+        row for row in rows
+        if row.get("status") == "1"
+        and split_student_numbers(row.get("connection_requests", ""))
+        and not row.get("consent_response")
+        and not row.get("consent_email_sent_at")
+    ]
+    unavailable_people = {
+        normalize_student_number(row.get("student_number", ""))
+        for row in awaiting_consent
+    }
+    pending_consent = []
+    deferred_consent = []
+    for row in sorted(consent_candidates, key=lambda item: item.get("submitted_at", "")):
+        student_number = normalize_student_number(row.get("student_number", ""))
+        if student_number in unavailable_people:
+            deferred_consent.append(row)
+            continue
+        pending_consent.append(row)
+        unavailable_people.add(student_number)
     approved_targets = [
         row for row in rows
         if row.get("consent_response") == "yes"
@@ -491,21 +584,42 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
 
     print("Review actions")
     print("==============")
-    print(f"Pending consent emails: {len(pending_consent)}")
+    print(f"Unsent consent emails: {len(pending_consent)}")
+    print(f"Awaiting consent responses: {len(awaiting_consent)}")
+    print(f"Deferred consent emails for people already awaiting: {len(deferred_consent)}")
     print(f"Approved target email batches: {len(approved_targets)}")
     print(f"Rejected consent rows needing cleanup: {len(rejected_requests)}")
     print(f"Multi-person pools with no pending consent row: {len(unattended_groups)}")
 
     if pending_consent:
         print()
-        print("Pending consent emails")
-        print("----------------------")
+        print("Unsent consent emails")
+        print("---------------------")
         for row in pending_consent:
             print()
             print_action_row(row)
             if ask_yes_no("Generate this consent email now?"):
                 print()
-                print_consent_email(client, rows, row["id"])
+                write_consent_email(client, rows, row["id"])
+                if not confirm_consent_email_sent(client, row["id"]):
+                    return
+
+    if awaiting_consent:
+        print()
+        print("Awaiting consent responses")
+        print("--------------------------")
+        print("These consent emails are already marked as sent and will not be generated again.")
+        for row in awaiting_consent:
+            print_action_row(row)
+            print(f"  Sent at: {row.get('consent_email_sent_at', '')}")
+
+    if deferred_consent:
+        print()
+        print("Deferred consent emails")
+        print("-----------------------")
+        print("These will remain deferred until the same person's earlier consent request receives a response.")
+        for row in deferred_consent:
+            print_action_row(row)
 
     if approved_targets:
         print()
@@ -560,6 +674,7 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
                 result = client.patch_submission(requester["id"], {
                     "status": "1",
                     "connection_requests": normalize_connected_student_numbers("|".join(target_numbers)),
+                    "consent_email_sent_at": "",
                     "consent_response": "",
                     "consent_responded_at": "",
                 })
@@ -567,11 +682,18 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
                 print_table([result["submission"]])
                 if ask_yes_no("Generate this consent email now?"):
                     print()
-                    print_consent_email(client, rows, requester["id"])
+                    updated_requester = normalize_submission(result["submission"])
+                    updated_rows = [
+                        updated_requester if row["id"] == requester["id"] else row
+                        for row in rows
+                    ]
+                    write_consent_email(client, updated_rows, requester["id"])
+                    if not confirm_consent_email_sent(client, requester["id"]):
+                        return
 
     if not any([pending_consent, approved_targets, rejected_requests, unattended_groups]):
         print()
-        print("Nothing needs attention right now.")
+        print("No action is required right now.")
 
 
 def print_action_row(row: dict[str, str]) -> None:
