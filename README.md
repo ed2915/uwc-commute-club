@@ -61,7 +61,7 @@ python3 tools/render_submissions.py delete sub_abc123
 ```
 
 New submissions are stored as one interest row per selected pool. If a student
-or staff number submits the same direction, suburb, and day/time again, the
+number submits the same direction, suburb, and day/time again, the
 duplicate interest is skipped instead of counted twice.
 
 Suggested matches are active entries with the same direction, the same suburb,
@@ -100,7 +100,7 @@ python3 tools/plot_participation.py --insecure \
   --output reports/august_participation.pdf
 ```
 
-The report contains aggregate counts only. It does not save student or staff
+The report contains aggregate counts only. It does not save student
 numbers. Because removed pool interests are deleted from the active database,
 the script cannot reconstruct participation that was subsequently removed.
 
@@ -109,26 +109,26 @@ the script cannot reconstruct participation that was subsequently removed.
 - Travelling to UWC or from UWC
 - Starting suburb from an alphabetic list
 - Travel schedule as exact day/time selections
-- Student or staff number, used to group pool interest
+- Valid 7-digit student number, used to group pool interest
 - Popular pool counts from captured submissions
 - Connection requests for organiser review
 
 ## Privacy Handling
 
-Student or staff numbers are collected initially only to determine who falls
-into common pools. Student or staff numbers, or UWC email addresses derived
+Student numbers are collected initially only to determine who falls
+into common pools. Student numbers, or UWC email addresses derived
 from them, must not be shared with other people in a pool without explicit
 consent at a later stage.
 
 Before submission, users must tick an explicit consent checkbox confirming this
-limited purpose. Providing a student or staff number is voluntary, but it is
+limited purpose. Providing a student number is voluntary, but it is
 required to join pools and prevent duplicate entries.
 
-Public pages show aggregate pool counts only. Raw student or staff numbers are
+Public pages show aggregate pool counts only. Raw student numbers are
 available only through the token-protected admin tool. Route-interest records
 should be deleted when they are no longer needed for the commute-club project.
 Students can also remove a selected pool-interest record from the action panel
-by entering their student or staff number, choosing the same direction, suburb,
+by entering their student number, choosing the same direction, suburb,
 and day/time, and using the remove button. This deletes only that selected
 pool interest from the active database. The app does not keep extra copies
 that continue storing a removed pool interest after that removal.
@@ -136,7 +136,7 @@ that continue storing a removed pool interest after that removal.
 Submissions are kept with `status`, `connection_requests`, and
 `connected_student_numbers` fields. New pool interests start with status
 `0`, meaning the student has added themself to that pool. If the same pool
-already has other active student or staff numbers, the new row starts with
+already has other active student numbers, the new row starts with
 status `1` and `connection_requests` records the existing numbers in that pool
 for organiser review. No contact details are shared automatically. The
 `consent-email` command prints yes/no consent links without showing those other

@@ -101,11 +101,11 @@ def main() -> int:
     )
     patch_parser.add_argument(
         "--connection-requests",
-        help="Pipe-separated 6- or 7-digit student/staff numbers this row has requested to connect with.",
+        help="Pipe-separated 7-digit student numbers this row has requested to connect with.",
     )
     patch_parser.add_argument(
         "--connected-student-numbers",
-        help="Pipe-separated 6- or 7-digit student/staff numbers already connected with this row.",
+        help="Pipe-separated 7-digit student numbers already connected with this row.",
     )
     patch_parser.add_argument("--consent-token")
     patch_parser.add_argument("--consent-email-sent-at")
@@ -114,7 +114,7 @@ def main() -> int:
 
     connect_parser = subparsers.add_parser(
         "connect",
-        help="Manually update connected student/staff numbers for one submission.",
+        help="Manually update connected student numbers for one submission.",
     )
     connect_parser.add_argument("id", help="Submission id to update.")
     connect_group = connect_parser.add_mutually_exclusive_group(required=True)
@@ -122,13 +122,13 @@ def main() -> int:
         "--add",
         nargs="+",
         metavar="SN",
-        help="Add one or more 6- or 7-digit student/staff numbers to connected_student_numbers.",
+        help="Add one or more 7-digit student numbers to connected_student_numbers.",
     )
     connect_group.add_argument(
         "--remove",
         nargs="+",
         metavar="SN",
-        help="Remove one or more 6- or 7-digit student/staff numbers from connected_student_numbers.",
+        help="Remove one or more 7-digit student numbers from connected_student_numbers.",
     )
     connect_group.add_argument(
         "--set",
@@ -139,7 +139,7 @@ def main() -> int:
 
     cleanup_parser = subparsers.add_parser(
         "delete-without-student-number",
-        help="Delete rows that do not have a valid 6- or 7-digit student/staff number.",
+        help="Delete rows that do not have a valid 7-digit student number.",
     )
     cleanup_parser.add_argument(
         "--apply",
@@ -242,7 +242,7 @@ def main() -> int:
         elif args.command == "delete-without-student-number":
             submissions = client.list_submissions()
             rows = rows_without_valid_student_number(submissions)
-            print(f"Rows without a valid 6- or 7-digit student/staff number: {len(rows)}")
+            print(f"Rows without a valid 7-digit student number: {len(rows)}")
             if rows:
                 print_table(rows)
             if args.apply:
@@ -374,6 +374,8 @@ def write_consent_email(
     force: bool = False,
 ) -> dict[str, str]:
     row = find_submission(submissions, submission_id)
+    if not is_valid_student_number(row.get("student_number", "")):
+        raise AdminError("This row does not have a usable 7-digit student number.")
     if row.get("status") != "1" or not row.get("connection_requests"):
         raise AdminError("Consent email requires a row with status 1 and connection_requests.")
     if row.get("consent_response"):
@@ -416,7 +418,7 @@ def write_consent_email(
         "",
         "You asked to connect with other people in one of your UWC Commute Club pools.",
         "Before your UWC email address is shared, please choose one of the options below.",
-        "The student/staff numbers of the other people in the pool are not shown in this email.",
+        "The student numbers of the other people in the pool are not shown in this email.",
         "You will remain in this pool until you remove yourself via the webpage, so you may receive future connection requests for it.",
         "",
         f"Pool: {format_direction(row['direction'])}, {row['area']}, {format_schedule(row['schedule'])}",
@@ -443,8 +445,11 @@ def print_target_emails(
     submissions: list[dict[str, str]],
     submission_id: str,
     apply: bool = False,
+    show_apply_instruction: bool = True,
 ) -> None:
     row = find_submission(submissions, submission_id)
+    if not is_valid_student_number(row.get("student_number", "")):
+        raise AdminError("This row does not have a usable 7-digit student number.")
     if row.get("consent_response") != "yes":
         raise AdminError("Target emails can only be generated after consent_response is yes.")
 
@@ -479,8 +484,9 @@ def print_target_emails(
         print("Thank you.")
 
     if not apply:
-        print()
-        print("Preview only. After sending these emails, rerun with --apply.")
+        if show_apply_instruction:
+            print()
+            print("Preview only. After sending these emails, rerun with --apply.")
         return
 
     result = apply_target_emails_sent(client, row)
@@ -542,7 +548,11 @@ def apply_target_emails_sent(
 
 
 def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> None:
-    rows = [normalize_submission(row) for row in submissions]
+    rows = [
+        normalize_submission(row)
+        for row in submissions
+        if is_valid_student_number(normalize_submission(row).get("student_number", ""))
+    ]
     awaiting_consent = [
         row for row in rows
         if row.get("status") == "1"
@@ -632,7 +642,13 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
             print(f"Targets: {', '.join(pending)}")
             if ask_yes_no("Generate target emails for this approved request?"):
                 print()
-                print_target_emails(client, rows, row["id"], apply=False)
+                print_target_emails(
+                    client,
+                    rows,
+                    row["id"],
+                    apply=False,
+                    show_apply_instruction=False,
+                )
                 if ask_yes_no("Have you sent these target emails and want to mark them connected?"):
                     result = apply_target_emails_sent(client, row)
                     print("Updated:")
@@ -897,7 +913,7 @@ def normalize_student_number(value: str) -> str:
 
 
 def is_valid_student_number(value: str) -> bool:
-    return len(normalize_student_number(value)) in {6, 7}
+    return len(normalize_student_number(value)) == 7
 
 
 def split_student_numbers(value: str) -> list[str]:
@@ -913,7 +929,7 @@ def normalize_connected_student_numbers(value: str) -> str:
     invalid = [part for part in parts if not is_valid_student_number(part)]
     if invalid:
         raise AdminError(
-            "Connected student/staff numbers must be 6- or 7-digit numbers separated by |. "
+            "Connected student numbers must be 7-digit numbers separated by |. "
             f"Invalid: {', '.join(invalid)}"
         )
     return "|".join(sorted(set(normalize_student_number(part) for part in parts)))
@@ -954,6 +970,7 @@ def suggest_matches(
         if submission.get("status", "0") in {"0", "1", "2", "pending", ""}
         and submission.get("direction") in {"to_uwc", "from_uwc"}
         and submission.get("area")
+        and is_valid_student_number(submission.get("student_number", ""))
     ]
     buckets: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
 

@@ -133,7 +133,7 @@ async function removeSelectedInterest(payload) {
     setActionStatus("Removed you from that pool.", "success");
     loadPopularRoutes();
   } else {
-    setActionStatus("No matching pool interest was found for that student or staff number.", "success");
+    setActionStatus("No matching pool interest was found for that student number.", "success");
   }
 }
 
@@ -153,7 +153,7 @@ function validateSelectedRoute(payload) {
   if (!["to_uwc", "from_uwc"].includes(payload.direction)) return "Choose a travel direction.";
   if (!payload.area) return "Choose a suburb.";
   if (!payload.schedule) return "Choose a day and time.";
-  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid student or staff number.";
+  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid 7-digit student number.";
   if (!payload.consent) return "Please consent before continuing.";
   return "";
 }
@@ -168,7 +168,7 @@ async function lookupStudentPools() {
   const studentNumber = normalizeStudentNumber(poolLookupStudentNumberInput.value);
 
   if (!isValidStudentNumber(studentNumber)) {
-    setPoolLookupStatus("Enter a valid student or staff number.", "error");
+    setPoolLookupStatus("Enter a valid 7-digit student number.", "error");
     return;
   }
 
@@ -184,7 +184,7 @@ async function lookupStudentPools() {
     }
 
     renderStudentPools(result.pools || []);
-    setPoolLookupStatus(result.pools?.length ? "Pools loaded." : "No pools found for that student or staff number.", "success");
+    setPoolLookupStatus(result.pools?.length ? "Pools loaded." : "No pools found for that student number.", "success");
   } catch (error) {
     setPoolLookupStatus(error.message, "error");
   } finally {
@@ -345,7 +345,7 @@ function normalizeStudentNumber(value) {
 }
 
 function isValidStudentNumber(value) {
-  return /^\d{6,7}$/.test(value);
+  return /^\d{7}$/.test(value);
 }
 
 function escapeHtml(value) {

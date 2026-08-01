@@ -252,8 +252,8 @@ function validateSubmission(payload) {
   if (!isText(payload.area)) return "Choose or enter a starting area";
   if (!Array.isArray(payload.schedule) || payload.schedule.length === 0) return "Choose at least one day and time";
   if (!payload.schedule.every(isScheduleCell)) return "One of the selected schedule times is invalid";
-  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid student or staff number";
-  if (payload.privacyConsent !== true) return "Consent is required to collect your student or staff number";
+  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid 7-digit student number";
+  if (payload.privacyConsent !== true) return "Consent is required to collect your student number";
   return "";
 }
 
@@ -267,7 +267,7 @@ async function handleRemoveStudentNumber(request, response) {
   }
 
   if (!isValidStudentNumber(payload.studentNumber)) {
-    sendJson(response, 400, { error: "Enter a valid student or staff number" });
+    sendJson(response, 400, { error: "Enter a valid 7-digit student number" });
     return;
   }
 
@@ -397,7 +397,7 @@ async function handleConnectionRequest(request, response) {
 
 function validateConnectionRequest(payload) {
   if (!payload || typeof payload !== "object") return "Connection request is missing";
-  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid student or staff number";
+  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid 7-digit student number";
   if (!["to_uwc", "from_uwc"].includes(payload.direction)) return "Choose a travel direction";
   if (!isText(payload.area)) return "Choose a suburb";
   if (!isScheduleCell(payload.schedule)) return "Choose a valid day and time";
@@ -497,6 +497,7 @@ async function handlePopularRoutes(response) {
   for (const submission of submissions) {
     const area = normalizeArea(submission.area);
     if (!isActiveStatus(submission.status)) continue;
+    if (hasSixDigitStudentNumber(submission)) continue;
     if (!area || !["to_uwc", "from_uwc"].includes(submission.direction)) continue;
     uniqueUserKeys.add(submissionIdentityKey(submission));
 
@@ -530,7 +531,7 @@ async function handleStudentPools(url, response) {
   const studentNumber = normalizeStudentNumber(url.searchParams.get("studentNumber"));
 
   if (!isValidStudentNumber(studentNumber)) {
-    sendJson(response, 400, { error: "Enter a valid student or staff number" });
+    sendJson(response, 400, { error: "Enter a valid 7-digit student number" });
     return;
   }
 
@@ -690,13 +691,13 @@ function validateAdminPatch(payload) {
   if ("direction" in payload && !["to_uwc", "from_uwc"].includes(payload.direction)) return "Direction is invalid";
   if ("area" in payload && !isText(payload.area)) return "Area is invalid";
   if ("schedule" in payload && !String(payload.schedule).split("|").filter(Boolean).every(isScheduleCell)) return "Schedule is invalid";
-  if ("student_number" in payload && !isValidStudentNumber(payload.student_number)) return "Student or staff number is invalid";
+  if ("student_number" in payload && !isValidStudentNumber(payload.student_number)) return "Student number is invalid";
   if ("status" in payload && !["0", "1", "2", "pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
   if ("connection_requests" in payload && !isValidStudentNumberList(payload.connection_requests)) {
-    return "Connection requests must be 6- or 7-digit numbers separated by |";
+    return "Connection requests must be 7-digit numbers separated by |";
   }
   if ("connected_student_numbers" in payload && !isValidConnectedStudentNumbers(payload.connected_student_numbers)) {
-    return "Connected student or staff numbers must be 6- or 7-digit numbers separated by |";
+    return "Connected student numbers must be 7-digit numbers separated by |";
   }
   if ("consent_response" in payload && !["", "yes", "no"].includes(String(payload.consent_response || ""))) return "Consent response is invalid";
 
@@ -729,7 +730,11 @@ function normalizeStudentNumber(value) {
 }
 
 function isValidStudentNumber(value) {
-  return /^\d{6,7}$/.test(String(value || "").replace(/\D/g, ""));
+  return /^\d{7}$/.test(String(value || "").replace(/\D/g, ""));
+}
+
+function hasSixDigitStudentNumber(submission) {
+  return /^\d{6}$/.test(String(submission.student_number || "").replace(/\D/g, ""));
 }
 
 function normalizeSubmissionStatus(status) {
@@ -786,6 +791,7 @@ function routeGroupMembers(submissions, direction, area, schedule) {
 
   for (const submission of submissions) {
     if (!isActiveStatus(submission.status)) continue;
+    if (hasSixDigitStudentNumber(submission)) continue;
     if (submission.direction !== direction) continue;
     if (normalizeArea(submission.area).toLowerCase() !== normalizeArea(area).toLowerCase()) continue;
     if (!scheduleCells(submission).includes(schedule)) continue;

@@ -126,6 +126,12 @@ def participation_events(
         if status not in ACTIVE_STATUSES:
             continue
 
+        student_number = "".join(
+            character for character in str(row.get("student_number", "")) if character.isdigit()
+        )
+        if len(student_number) == 6:
+            continue
+
         direction = str(row.get("direction", "")).strip()
         area = normalize_area(row.get("area", ""))
         if direction not in {"to_uwc", "from_uwc"} or not area:
