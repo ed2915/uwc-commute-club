@@ -484,7 +484,7 @@ async function handleConsentResponse(url, response) {
 
   const message = answer === "yes"
     ? "Thank you. Your consent has been recorded."
-    : "Thank you. Your response has been recorded. Your email address will not be shared for this pool.";
+    : "Thank you. Your response has been recorded. Your email address will not be shared, and your interest in this pool will be removed.";
   sendHtml(response, 200, consentPage("Response Recorded", message));
 }
 

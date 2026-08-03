@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 
 DEFAULT_BASE_URL = "https://uwc-commute-club.onrender.com"
 CONSENT_EMAIL_FILE = Path(__file__).resolve().parent.parent / "consent_email.txt"
+REMOVAL_EMAIL_FILE = Path(__file__).resolve().parent.parent / "removal_email.txt"
 SAST = ZoneInfo("Africa/Johannesburg")
 FIELDS = [
     "id",
@@ -588,7 +589,6 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
     rejected_requests = [
         row for row in rows
         if row.get("consent_response") == "no"
-        and split_student_numbers(row.get("connection_requests", ""))
     ]
     unattended_groups = unrequested_multi_person_pools(rows)
 
@@ -661,13 +661,14 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
         for row in rejected_requests:
             print()
             print_action_row(row)
-            if ask_yes_no("Clear the pending connection request for this row?"):
-                result = client.patch_submission(row["id"], {
-                    "connection_requests": "",
-                    "status": "0",
-                })
-                print("Updated:")
-                print_table([result["submission"]])
+            if ask_yes_no("Generate the pool-removal notification email?"):
+                print()
+                write_removal_email(row)
+                if ask_yes_no("Have you sent this removal notification and want to delete the pool row?"):
+                    client.delete_submission(row["id"])
+                    REMOVAL_EMAIL_FILE.unlink(missing_ok=True)
+                    print(f"Deleted {row['id']}")
+                    print(f"Removed local removal email file: {REMOVAL_EMAIL_FILE}")
 
     if unattended_groups:
         print()
@@ -720,6 +721,33 @@ def print_action_row(row: dict[str, str]) -> None:
     )
 
 
+def write_removal_email(row: dict[str, str]) -> None:
+    if row.get("consent_response") != "no":
+        raise AdminError("A removal notification requires consent_response to be no.")
+
+    text = "\n".join([
+        f"To: {student_email(row['student_number'])}",
+        "Subject: UWC Commute Club pool removal",
+        "",
+        "Hello,",
+        "",
+        "You chose not to consent to sharing your UWC email address with other students in this pool:",
+        "",
+        f"Pool: {format_direction(row['direction'])}, {row['area']}, {format_schedule(row['schedule'])}",
+        "",
+        "Your interest in this pool has therefore been removed from the UWC Commute Club database.",
+        "Your contact details were not shared.",
+        "",
+        "This does not affect any of your other pool interests. You may add this pool again later through the webpage if you change your mind.",
+        "",
+        "Thank you.",
+    ])
+    REMOVAL_EMAIL_FILE.write_text(f"{text}\n", encoding="utf-8")
+    print(text)
+    print()
+    print(f"Saved removal email to: {REMOVAL_EMAIL_FILE}")
+
+
 def ask_yes_no(question: str) -> bool:
     answer = input(f"{question} [y/N] ").strip().lower()
     return answer in {"y", "yes"}
@@ -731,6 +759,7 @@ def unrequested_multi_person_pools(
     active = [
         row for row in submissions
         if row.get("status", "0") in {"0", "1", "2", "pending", ""}
+        and row.get("consent_response") != "no"
         and row.get("direction") in {"to_uwc", "from_uwc"}
         and row.get("area")
         and is_valid_student_number(row.get("student_number", ""))
