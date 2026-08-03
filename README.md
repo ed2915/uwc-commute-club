@@ -147,8 +147,11 @@ the target emails, `target-emails --apply` moves those numbers into
 When `review-actions` generates a consent email, it also writes the complete
 message to `consent_email.txt` in the project directory. After the organiser
 confirms that the email was sent, the script records `consent_email_sent_at`.
-It will not generate another consent email for that submission, or another
-pending submission belonging to the same person, while a response is still
-outstanding. The local text file is removed after sending is confirmed so it
-does not become an extra retained copy. An intentional manual resend requires
+That original timestamp is retained. While a response remains outstanding,
+`review-actions` offers a reminder every three days on a schedule anchored to
+the original send time. Confirmed reminders update
+`consent_email_last_sent_at` so the same reminder is not offered twice.
+Another pending submission belonging to the same person remains deferred. The
+local text file is removed after sending is confirmed so it does not become an
+extra retained copy. An intentional manual resend requires
 `consent-email ID --force`.

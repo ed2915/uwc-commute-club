@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -22,6 +22,7 @@ DEFAULT_BASE_URL = "https://uwc-commute-club.onrender.com"
 CONSENT_EMAIL_FILE = Path(__file__).resolve().parent.parent / "consent_email.txt"
 REMOVAL_EMAIL_FILE = Path(__file__).resolve().parent.parent / "removal_email.txt"
 SAST = ZoneInfo("Africa/Johannesburg")
+CONSENT_REMINDER_INTERVAL = timedelta(days=3)
 FIELDS = [
     "id",
     "submitted_at",
@@ -34,6 +35,7 @@ FIELDS = [
     "connected_student_numbers",
     "consent_token",
     "consent_email_sent_at",
+    "consent_email_last_sent_at",
     "consent_response",
     "consent_responded_at",
 ]
@@ -110,6 +112,7 @@ def main() -> int:
     )
     patch_parser.add_argument("--consent-token")
     patch_parser.add_argument("--consent-email-sent-at")
+    patch_parser.add_argument("--consent-email-last-sent-at")
     patch_parser.add_argument("--consent-response", choices=["", "yes", "no"])
     patch_parser.add_argument("--consent-responded-at")
 
@@ -263,7 +266,11 @@ def main() -> int:
         elif args.command == "consent-email":
             submissions = client.list_submissions()
             row = write_consent_email(client, submissions, args.id, force=args.force)
-            confirm_consent_email_sent(client, row["id"])
+            confirm_consent_email_sent(
+                client,
+                row["id"],
+                reminder=bool(row.get("consent_email_sent_at")),
+            )
         elif args.command == "target-emails":
             submissions = client.list_submissions()
             print_target_emails(client, submissions, args.id, apply=args.apply)
@@ -359,6 +366,7 @@ def build_patch(args: argparse.Namespace) -> dict[str, str]:
     for field in [
         "consent_token",
         "consent_email_sent_at",
+        "consent_email_last_sent_at",
         "consent_response",
         "consent_responded_at",
     ]:
@@ -373,8 +381,10 @@ def write_consent_email(
     submissions: list[dict[str, str]],
     submission_id: str,
     force: bool = False,
+    reminder: bool = False,
 ) -> dict[str, str]:
     row = find_submission(submissions, submission_id)
+    reminder = reminder or bool(row.get("consent_email_sent_at"))
     if not is_valid_student_number(row.get("student_number", "")):
         raise AdminError("This row does not have a usable 7-digit student number.")
     if row.get("status") != "1" or not row.get("connection_requests"):
@@ -411,13 +421,23 @@ def write_consent_email(
     yes_link = f"{base_url}/consent?token={quote(token, safe='')}&answer=yes"
     no_link = f"{base_url}/consent?token={quote(token, safe='')}&answer=no"
     to_email = student_email(row["student_number"])
+    subject = (
+        "Reminder: UWC Commute Club pool contact request"
+        if reminder
+        else "UWC Commute Club pool contact request"
+    )
+    introduction = (
+        "This is a reminder that you asked to connect with other people in one of your UWC Commute Club pools."
+        if reminder
+        else "You asked to connect with other people in one of your UWC Commute Club pools."
+    )
     text = "\n".join([
         f"To: {to_email}",
-        "Subject: UWC Commute Club pool contact request",
+        f"Subject: {subject}",
         "",
         "Hello,",
         "",
-        "You asked to connect with other people in one of your UWC Commute Club pools.",
+        introduction,
         "Before your UWC email address is shared, please choose one of the options below.",
         "The student numbers of the other people in the pool are not shown in this email.",
         "You will remain in this pool until you remove yourself via the webpage, so you may receive future connection requests for it.",
@@ -518,17 +538,61 @@ def local_timestamp() -> str:
     return f"{now.strftime('%Y-%m-%d %H:%M:%S')}.{now.microsecond // 1000:03d} SAST"
 
 
-def confirm_consent_email_sent(client: AdminClient, submission_id: str) -> bool:
+def parse_stored_timestamp(value: str) -> datetime:
+    text = str(value or "").strip()
+    if not text:
+        raise AdminError("Consent email timestamp is missing.")
+
+    try:
+        if text.endswith(" SAST"):
+            parsed = datetime.strptime(text, "%Y-%m-%d %H:%M:%S.%f SAST")
+            return parsed.replace(tzinfo=SAST)
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(SAST)
+    except ValueError as error:
+        raise AdminError(f"Invalid consent email timestamp: {text}") from error
+
+
+def next_consent_reminder_at(row: dict[str, str]) -> datetime:
+    first_sent = parse_stored_timestamp(row.get("consent_email_sent_at", ""))
+    last_sent = parse_stored_timestamp(
+        row.get("consent_email_last_sent_at")
+        or row.get("consent_email_sent_at", "")
+    )
+    elapsed = max(last_sent - first_sent, timedelta(0))
+    completed_intervals = int(
+        elapsed.total_seconds() // CONSENT_REMINDER_INTERVAL.total_seconds()
+    )
+    return first_sent + CONSENT_REMINDER_INTERVAL * (completed_intervals + 1)
+
+
+def consent_reminder_due(
+    row: dict[str, str],
+    now: datetime | None = None,
+) -> bool:
+    return (now or datetime.now(SAST)) >= next_consent_reminder_at(row)
+
+
+def format_local_datetime(value: datetime) -> str:
+    return f"{value.astimezone(SAST).strftime('%Y-%m-%d %H:%M:%S')} SAST"
+
+
+def confirm_consent_email_sent(
+    client: AdminClient,
+    submission_id: str,
+    reminder: bool = False,
+) -> bool:
     if not ask_yes_no("Have you sent this consent email?"):
         print("Not marked as sent. The file will be offered again during the next review.")
         return False
 
     sent_at = local_timestamp()
-    result = client.patch_submission(submission_id, {
-        "consent_email_sent_at": sent_at,
-    })
+    patch = {"consent_email_last_sent_at": sent_at}
+    if not reminder:
+        patch["consent_email_sent_at"] = sent_at
+    result = client.patch_submission(submission_id, patch)
     CONSENT_EMAIL_FILE.unlink(missing_ok=True)
-    print(f"Marked as sent at {sent_at}.")
+    label = "reminder" if reminder else "consent email"
+    print(f"Marked {label} as sent at {sent_at}.")
     print(f"Removed local consent email file: {CONSENT_EMAIL_FILE}")
     print_table([result["submission"]])
     return True
@@ -560,6 +624,10 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
         and split_student_numbers(row.get("connection_requests", ""))
         and not row.get("consent_response")
         and row.get("consent_email_sent_at")
+    ]
+    due_reminders = [
+        row for row in awaiting_consent
+        if consent_reminder_due(row)
     ]
     consent_candidates = [
         row for row in rows
@@ -596,6 +664,7 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
     print("==============")
     print(f"Unsent consent emails: {len(pending_consent)}")
     print(f"Awaiting consent responses: {len(awaiting_consent)}")
+    print(f"Consent reminders due: {len(due_reminders)}")
     print(f"Deferred consent emails for people already awaiting: {len(deferred_consent)}")
     print(f"Approved target email batches: {len(approved_targets)}")
     print(f"Rejected consent rows needing cleanup: {len(rejected_requests)}")
@@ -614,14 +683,37 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
                 if not confirm_consent_email_sent(client, row["id"]):
                     return
 
+    if due_reminders:
+        print()
+        print("Consent reminders due")
+        print("---------------------")
+        for row in due_reminders:
+            print()
+            print_action_row(row)
+            print(f"  First sent: {row.get('consent_email_sent_at', '')}")
+            print(f"  Last sent: {row.get('consent_email_last_sent_at') or row.get('consent_email_sent_at', '')}")
+            if ask_yes_no("Generate this consent reminder now?"):
+                print()
+                write_consent_email(
+                    client,
+                    rows,
+                    row["id"],
+                    force=True,
+                    reminder=True,
+                )
+                if not confirm_consent_email_sent(client, row["id"], reminder=True):
+                    return
+
     if awaiting_consent:
         print()
         print("Awaiting consent responses")
         print("--------------------------")
-        print("These consent emails are already marked as sent and will not be generated again.")
+        print("These rows are awaiting responses. Reminders are offered every three days from the first send time.")
         for row in awaiting_consent:
             print_action_row(row)
-            print(f"  Sent at: {row.get('consent_email_sent_at', '')}")
+            print(f"  First sent: {row.get('consent_email_sent_at', '')}")
+            print(f"  Last sent: {row.get('consent_email_last_sent_at') or row.get('consent_email_sent_at', '')}")
+            print(f"  Next reminder: {format_local_datetime(next_consent_reminder_at(row))}")
 
     if deferred_consent:
         print()
@@ -692,6 +784,7 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
                     "status": "1",
                     "connection_requests": normalize_connected_student_numbers("|".join(target_numbers)),
                     "consent_email_sent_at": "",
+                    "consent_email_last_sent_at": "",
                     "consent_response": "",
                     "consent_responded_at": "",
                 })
@@ -708,7 +801,13 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
                     if not confirm_consent_email_sent(client, requester["id"]):
                         return
 
-    if not any([pending_consent, approved_targets, rejected_requests, unattended_groups]):
+    if not any([
+        pending_consent,
+        due_reminders,
+        approved_targets,
+        rejected_requests,
+        unattended_groups,
+    ]):
         print()
         print("No action is required right now.")
 
