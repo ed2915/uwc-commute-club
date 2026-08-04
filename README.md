@@ -155,3 +155,16 @@ Another pending submission belonging to the same person remains deferred. The
 local text file is removed after sending is confirmed so it does not become an
 extra retained copy. An intentional manual resend requires
 `consent-email ID --force`.
+
+### Codex Gmail plugin workflow
+
+Routine email handling uses the Codex Gmail plugin connected only to
+`uwccommuteclub@uwc.ac.za`. The Render administration script remains the source
+of truth for pending actions and database reconciliation.
+
+Ask Codex to "Review UWC Commute Club activity and prepare the necessary Gmail
+drafts." Codex checks Render, creates only the missing drafts, and reports what
+is awaiting a response. Drafts are never sent without an explicit instruction.
+After a draft is sent, Codex updates the matching Render row so that reminders,
+connections, and rejected requests are handled correctly without duplicate
+emails.
