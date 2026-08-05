@@ -94,6 +94,12 @@ def main() -> int:
     delete_parser = subparsers.add_parser("delete", help="Delete a submission by id.")
     delete_parser.add_argument("id")
 
+    delete_request_parser = subparsers.add_parser(
+        "delete-request",
+        help="Delete a historical connection-request record by id.",
+    )
+    delete_request_parser.add_argument("id")
+
     patch_parser = subparsers.add_parser("set", help="Update fields for a submission.")
     patch_parser.add_argument("id")
     patch_parser.add_argument("--direction", choices=["to_uwc", "from_uwc"])
@@ -228,6 +234,9 @@ def main() -> int:
         elif args.command == "delete":
             result = client.delete_submission(args.id)
             print(f"Deleted {result.get('deleted', args.id)}")
+        elif args.command == "delete-request":
+            result = client.delete_connection_request(args.id)
+            print(f"Deleted request {result.get('deleted', args.id)}")
         elif args.command == "dedupe":
             submissions = client.list_submissions()
             plan = dedupe_plan(submissions)
@@ -315,6 +324,10 @@ class AdminClient:
 
     def delete_submission(self, submission_id: str) -> dict[str, str]:
         path = f"/api/admin/submissions/{quote(submission_id, safe='')}"
+        return self.request("DELETE", path)
+
+    def delete_connection_request(self, request_id: str) -> dict[str, str]:
+        path = f"/api/admin/connection-requests/{quote(request_id, safe='')}"
         return self.request("DELETE", path)
 
     def patch_submission(self, submission_id: str, patch: dict[str, str]) -> dict[str, object]:

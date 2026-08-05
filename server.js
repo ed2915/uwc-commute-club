@@ -109,6 +109,11 @@ createServer(async (request, response) => {
       return;
     }
 
+    if (url.pathname.startsWith("/api/admin/connection-requests/")) {
+      await handleAdminConnectionRequest(request, response, url.pathname);
+      return;
+    }
+
     if (url.pathname.startsWith("/api/admin/submissions/")) {
       await handleAdminSubmission(request, response, url.pathname);
       return;
@@ -633,6 +638,32 @@ async function handleAdminConnectionRequests(request, response) {
   sendJson(response, 200, { requests });
 }
 
+async function handleAdminConnectionRequest(request, response, pathname) {
+  if (!authorizeAdmin(request, response)) return;
+
+  const id = decodeURIComponent(pathname.replace("/api/admin/connection-requests/", ""));
+  if (!id) {
+    sendJson(response, 400, { error: "Connection request id is required" });
+    return;
+  }
+
+  if (request.method !== "DELETE") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const requests = await readConnectionRequests();
+  const nextRequests = requests.filter((connectionRequest) => connectionRequest.id !== id);
+
+  if (nextRequests.length === requests.length) {
+    sendJson(response, 404, { error: "Connection request not found" });
+    return;
+  }
+
+  await writeConnectionRequests(nextRequests);
+  sendJson(response, 200, { ok: true, deleted: id });
+}
+
 async function handleAdminSubmission(request, response, pathname) {
   if (!authorizeAdmin(request, response)) return;
 
@@ -946,6 +977,18 @@ async function writeSubmissions(submissions) {
   const tempFile = `${submissionsFile}.tmp`;
   await writeFile(tempFile, `${lines.join("\n")}\n`);
   await rename(tempFile, submissionsFile);
+}
+
+async function writeConnectionRequests(requests) {
+  const lines = [
+    connectionRequestHeaders.join(","),
+    ...requests.map((connectionRequest) => connectionRequestHeaders
+      .map((header) => csvCell(connectionRequest[header] || ""))
+      .join(","))
+  ];
+  const tempFile = `${connectionRequestsFile}.tmp`;
+  await writeFile(tempFile, `${lines.join("\n")}\n`);
+  await rename(tempFile, connectionRequestsFile);
 }
 
 async function readConnectionRequests() {
