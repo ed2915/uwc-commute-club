@@ -30,6 +30,8 @@ FIELDS = [
     "area",
     "schedule",
     "student_number",
+    "email_address",
+    "email_sharing_consent",
     "status",
     "connection_requests",
     "connected_student_numbers",
@@ -98,17 +100,19 @@ def main() -> int:
     patch_parser.add_argument("--area")
     patch_parser.add_argument("--schedule", help="Example: mon@07:00|wed@08:30")
     patch_parser.add_argument("--student-number")
+    patch_parser.add_argument("--email-address")
+    patch_parser.add_argument("--email-sharing-consent", choices=["", "yes"])
     patch_parser.add_argument(
         "--status",
         choices=["0", "1", "2", "pending", "matched", "deleted", "archived"],
     )
     patch_parser.add_argument(
         "--connection-requests",
-        help="Pipe-separated 7-digit student numbers this row has requested to connect with.",
+        help="Pipe-separated 6- or 7-digit UWC numbers this row has requested to connect with.",
     )
     patch_parser.add_argument(
         "--connected-student-numbers",
-        help="Pipe-separated 7-digit student numbers already connected with this row.",
+        help="Pipe-separated 6- or 7-digit UWC numbers already connected with this row.",
     )
     patch_parser.add_argument("--consent-token")
     patch_parser.add_argument("--consent-email-sent-at")
@@ -126,13 +130,13 @@ def main() -> int:
         "--add",
         nargs="+",
         metavar="SN",
-        help="Add one or more 7-digit student numbers to connected_student_numbers.",
+        help="Add one or more 6- or 7-digit UWC numbers to connected_student_numbers.",
     )
     connect_group.add_argument(
         "--remove",
         nargs="+",
         metavar="SN",
-        help="Remove one or more 7-digit student numbers from connected_student_numbers.",
+        help="Remove one or more 6- or 7-digit UWC numbers from connected_student_numbers.",
     )
     connect_group.add_argument(
         "--set",
@@ -143,7 +147,7 @@ def main() -> int:
 
     cleanup_parser = subparsers.add_parser(
         "delete-without-student-number",
-        help="Delete rows that do not have a valid 7-digit student number.",
+        help="Delete rows that do not have a usable student or staff identity.",
     )
     cleanup_parser.add_argument(
         "--apply",
@@ -246,7 +250,7 @@ def main() -> int:
         elif args.command == "delete-without-student-number":
             submissions = client.list_submissions()
             rows = rows_without_valid_student_number(submissions)
-            print(f"Rows without a valid 7-digit student number: {len(rows)}")
+            print(f"Rows without a usable student or staff identity: {len(rows)}")
             if rows:
                 print_table(rows)
             if args.apply:
@@ -355,6 +359,10 @@ def build_patch(args: argparse.Namespace) -> dict[str, str]:
             patch[field] = value
     if args.student_number is not None:
         patch["student_number"] = "".join(char for char in args.student_number if char.isdigit())
+    if args.email_address is not None:
+        patch["email_address"] = normalize_email_address(args.email_address)
+    if args.email_sharing_consent is not None:
+        patch["email_sharing_consent"] = args.email_sharing_consent
     if args.connection_requests is not None:
         patch["connection_requests"] = normalize_connected_student_numbers(
             args.connection_requests
@@ -385,8 +393,8 @@ def write_consent_email(
 ) -> dict[str, str]:
     row = find_submission(submissions, submission_id)
     reminder = reminder or bool(row.get("consent_email_sent_at"))
-    if not is_valid_student_number(row.get("student_number", "")):
-        raise AdminError("This row does not have a usable 7-digit student number.")
+    if not is_usable_submission(row):
+        raise AdminError("This row does not have a usable student or staff identity.")
     if row.get("status") != "1" or not row.get("connection_requests"):
         raise AdminError("Consent email requires a row with status 1 and connection_requests.")
     if row.get("consent_response"):
@@ -420,7 +428,7 @@ def write_consent_email(
     base_url = os.environ.get("UWC_PUBLIC_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
     yes_link = f"{base_url}/consent?token={quote(token, safe='')}&answer=yes"
     no_link = f"{base_url}/consent?token={quote(token, safe='')}&answer=no"
-    to_email = student_email(row["student_number"])
+    to_email = submission_email(row)
     subject = (
         "Reminder: UWC Commute Club pool contact request"
         if reminder
@@ -439,14 +447,14 @@ def write_consent_email(
         "",
         introduction,
         "Before your UWC email address is shared, please choose one of the options below.",
-        "The student numbers of the other people in the pool are not shown in this email.",
+        "The UWC numbers of the other people in the pool are not shown in this email.",
         "You will remain in this pool until you remove yourself via the webpage, so you may receive future connection requests for it.",
         "",
         f"Pool: {format_direction(row['direction'])}, {row['area']}, {format_schedule(row['schedule'])}",
         "",
         safety_and_responsibility_text(),
         "",
-        "If you select Yes, your UWC student email address may be shared with the relevant students in this pool, and they may contact you directly.",
+        "If you select Yes, your UWC email address may be shared with the relevant people in this pool, and they may contact you directly.",
         "The organisers will not supervise those conversations or any arrangements that follow.",
         "",
         f"Yes, I consent: {yes_link}",
@@ -469,8 +477,8 @@ def print_target_emails(
     show_apply_instruction: bool = True,
 ) -> None:
     row = find_submission(submissions, submission_id)
-    if not is_valid_student_number(row.get("student_number", "")):
-        raise AdminError("This row does not have a usable 7-digit student number.")
+    if not is_usable_submission(row):
+        raise AdminError("This row does not have a usable student or staff identity.")
     if row.get("consent_response") != "yes":
         raise AdminError("Target emails can only be generated after consent_response is yes.")
 
@@ -478,7 +486,7 @@ def print_target_emails(
     if not pending:
         raise AdminError("No pending connection_requests remain for this row.")
 
-    requester_email = student_email(row["student_number"])
+    requester_email = submission_email(row)
     pool = f"{format_direction(row['direction'])}, {row['area']}, {format_schedule(row['schedule'])}"
 
     for index, target_sn in enumerate(pending, start=1):
@@ -486,7 +494,7 @@ def print_target_emails(
             print()
             print("-" * 72)
             print()
-        print(f"To: {student_email(target_sn)}")
+        print(f"To: {email_for_uwc_number(target_sn, submissions)}")
         print("Subject: UWC Commute Club pool contact")
         print()
         print("Hello,")
@@ -524,8 +532,8 @@ def safety_and_responsibility_text() -> str:
     return "\n".join([
         "Safety and responsibility note",
         "",
-        "UWC Commute Club only helps students identify others who have expressed interest in similar commute pools.",
-        "The organisers do not arrange, supervise, endorse, or take responsibility for any private discussions, travel arrangements, payments, lifts, meetings, or other decisions made between students after contact details are shared.",
+        "UWC Commute Club only helps people identify others who have expressed interest in similar commute pools.",
+        "The organisers do not arrange, supervise, endorse, or take responsibility for any private discussions, travel arrangements, payments, lifts, meetings, or other decisions made between participants after contact details are shared.",
         "",
         "Please use ordinary safety precautions when contacting or travelling with others. For example: meet or discuss arrangements in a public or university setting first; do not share unnecessary personal information; tell someone you trust about any planned lift or meeting; check details carefully before travelling; avoid arrangements that make you uncomfortable; and stop communication if anything feels unsafe or inappropriate.",
         "",
@@ -616,7 +624,7 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
     rows = [
         normalize_submission(row)
         for row in submissions
-        if is_valid_student_number(normalize_submission(row).get("student_number", ""))
+        if is_usable_submission(normalize_submission(row))
     ]
     awaiting_consent = [
         row for row in rows
@@ -825,12 +833,12 @@ def write_removal_email(row: dict[str, str]) -> None:
         raise AdminError("A removal notification requires consent_response to be no.")
 
     text = "\n".join([
-        f"To: {student_email(row['student_number'])}",
+        f"To: {submission_email(row)}",
         "Subject: UWC Commute Club pool removal",
         "",
         "Hello,",
         "",
-        "You chose not to consent to sharing your UWC email address with other students in this pool:",
+        "You chose not to consent to sharing your UWC email address with other people in this pool:",
         "",
         f"Pool: {format_direction(row['direction'])}, {row['area']}, {format_schedule(row['schedule'])}",
         "",
@@ -861,7 +869,7 @@ def unrequested_multi_person_pools(
         and row.get("consent_response") != "no"
         and row.get("direction") in {"to_uwc", "from_uwc"}
         and row.get("area")
-        and is_valid_student_number(row.get("student_number", ""))
+        and is_usable_submission(row)
     ]
     by_pool: dict[tuple[str, str, str], list[dict[str, str]]] = defaultdict(list)
 
@@ -945,7 +953,7 @@ def rows_without_valid_student_number(submissions: list[dict[str, str]]) -> list
     return [
         normalize_submission(row)
         for row in submissions
-        if not is_valid_student_number(normalize_submission(row).get("student_number", ""))
+        if not is_usable_submission(normalize_submission(row))
     ]
 
 
@@ -1044,20 +1052,49 @@ def is_valid_student_number(value: str) -> bool:
     return len(normalize_student_number(value)) == 7
 
 
+def is_valid_staff_number(value: str) -> bool:
+    return len(normalize_student_number(value)) == 6
+
+
+def is_valid_uwc_number(value: str) -> bool:
+    return is_valid_student_number(value) or is_valid_staff_number(value)
+
+
+def normalize_email_address(value: str) -> str:
+    return str(value or "").strip().lower()
+
+
+def is_valid_uwc_email(value: str) -> bool:
+    email = normalize_email_address(value)
+    local, separator, domain = email.rpartition("@")
+    return bool(separator and local and domain == "uwc.ac.za" and " " not in email)
+
+
+def is_usable_submission(row: dict[str, str]) -> bool:
+    number = row.get("student_number", "")
+    if is_valid_student_number(number):
+        return True
+    return (
+        is_valid_staff_number(number)
+        and is_valid_uwc_email(row.get("email_address", ""))
+        and row.get("email_sharing_consent") == "yes"
+    )
+
+
 def split_student_numbers(value: str) -> list[str]:
     return [
         normalize_student_number(part)
         for part in str(value or "").split("|")
-        if is_valid_student_number(part)
+        if is_valid_uwc_number(part)
     ]
 
 
 def normalize_connected_student_numbers(value: str) -> str:
     parts = [part for part in str(value or "").split("|") if part.strip()]
-    invalid = [part for part in parts if not is_valid_student_number(part)]
+    invalid = [part for part in parts if not is_valid_uwc_number(part)]
     if invalid:
         raise AdminError(
-            "Connected student numbers must be 7-digit numbers separated by |. "
+            "Connected UWC numbers must be 6- or 7-digit numbers separated by |. "
             f"Invalid: {', '.join(invalid)}"
         )
     return "|".join(sorted(set(normalize_student_number(part) for part in parts)))
@@ -1069,6 +1106,32 @@ def create_local_token() -> str:
 
 def student_email(student_number: str) -> str:
     return f"{normalize_student_number(student_number)}@myuwc.ac.za"
+
+
+def submission_email(row: dict[str, str]) -> str:
+    number = row.get("student_number", "")
+    if is_valid_student_number(number):
+        return student_email(number)
+    if is_usable_submission(row):
+        return normalize_email_address(row.get("email_address", ""))
+    raise AdminError("No usable UWC email address is available for this row.")
+
+
+def email_for_uwc_number(
+    uwc_number: str,
+    submissions: list[dict[str, str]],
+) -> str:
+    if is_valid_student_number(uwc_number):
+        return student_email(uwc_number)
+    normalized = normalize_student_number(uwc_number)
+    for row in submissions:
+        candidate = normalize_submission(row)
+        if (
+            normalize_student_number(candidate.get("student_number", "")) == normalized
+            and is_usable_submission(candidate)
+        ):
+            return submission_email(candidate)
+    raise AdminError(f"No usable UWC email address is available for staff number {normalized}.")
 
 
 def format_direction(direction: str) -> str:
@@ -1098,7 +1161,7 @@ def suggest_matches(
         if submission.get("status", "0") in {"0", "1", "2", "pending", ""}
         and submission.get("direction") in {"to_uwc", "from_uwc"}
         and submission.get("area")
-        and is_valid_student_number(submission.get("student_number", ""))
+        and is_usable_submission(submission)
     ]
     buckets: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
 

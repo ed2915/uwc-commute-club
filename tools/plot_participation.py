@@ -20,7 +20,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator, MultipleLocator
 
-from render_submissions import AdminClient, AdminError, DEFAULT_BASE_URL
+from render_submissions import (
+    AdminClient,
+    AdminError,
+    DEFAULT_BASE_URL,
+    is_usable_submission,
+)
 
 
 SAST = ZoneInfo("Africa/Johannesburg")
@@ -126,10 +131,7 @@ def participation_events(
         if status not in ACTIVE_STATUSES:
             continue
 
-        student_number = "".join(
-            character for character in str(row.get("student_number", "")) if character.isdigit()
-        )
-        if len(student_number) == 6:
+        if not is_usable_submission(row):
             continue
 
         direction = str(row.get("direction", "")).strip()

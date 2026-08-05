@@ -13,21 +13,21 @@
         <div>
           <p class="eyebrow">For University of the Western Cape commuters</p>
           <h1>UWC Commute Club</h1>
-          <p class="lede">Find students near you travelling to or from campus at similar times.</p>
+          <p class="lede">Find UWC students and staff near you travelling to or from campus at similar times.</p>
         </div>
       </section>
 
       <section class="service-preamble" aria-labelledby="servicePreambleTitle">
         <h2 id="servicePreambleTitle">Share the route, lighten the commute</h2>
-        <p>UWC Commute Club helps students see where shared commute pools may be possible, making it easier to explore lift clubs, reduce fuel costs, and support fewer cars travelling to campus.</p>
-        <p>Public pool tables show counts only. Your student number and contact details are not shown publicly, and your UWC email address will not be shared with anyone unless you give explicit consent later.</p>
+        <p>UWC Commute Club helps students and staff see where shared commute pools may be possible, making it easier to explore lift clubs, reduce fuel costs, and support fewer cars travelling to campus.</p>
+        <p>Public pool tables show counts only. Your UWC number and contact details are not shown publicly. Students are asked for consent before their derived email address is shared; staff provide consent when submitting their UWC email address.</p>
       </section>
 
       <aside class="draw-banner" aria-labelledby="drawTitle">
         <div>
           <p class="draw-kicker">Second-semester lucky draw</p>
           <h2 id="drawTitle">Join a pool and stand a chance to win a R1,000 fuel voucher</h2>
-          <p>All current UWC students with at least one active pool on 31 August 2026 will be entered. One entry per person.</p>
+          <p>All current UWC students and staff with at least one active pool on 31 August 2026 will be entered. One entry per person.</p>
         </div>
         <a class="button-link" href="/draw-rules.html">View the draw rules</a>
       </aside>
@@ -67,14 +67,14 @@
       <section class="pool-lookup-section" aria-labelledby="poolLookupTitle">
         <div>
           <h2 id="poolLookupTitle">Check My Pools</h2>
-          <p class="hint">Enter your valid 7-digit student number to see which pools you are already in.</p>
+          <p class="hint">Enter your 7-digit student number or 6-digit staff number to see which pools you are already in.</p>
         </div>
 
         <form id="poolLookupForm" class="pool-lookup-form">
           <div class="field-grid">
             <label>
-              7-digit student number
-              <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="7" maxlength="7" pattern="[0-9]{7}">
+              Student or staff number
+              <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="6" maxlength="7" pattern="[0-9]{6,7}">
             </label>
           </div>
           <button type="submit">Show my pools</button>
@@ -197,8 +197,8 @@
 
           <div class="field-grid">
             <label>
-              7-digit student number
-              <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="7" maxlength="7" pattern="[0-9]{7}">
+              Student or staff number
+              <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="6" maxlength="7" pattern="[0-9]{6,7}">
             </label>
           </div>
           <label class="honeypot-field" aria-hidden="true" tabindex="-1">
@@ -208,15 +208,15 @@
 
           <section class="privacy-notice" aria-labelledby="privacyTitle">
             <h2 id="privacyTitle">Privacy and consent</h2>
-            <p>UWC Commute Club collects your 7-digit student number, direction, suburb, and selected travel time only to record pool interest.</p>
-            <p>If other people are already in the same pool, the organiser may email you to ask whether you consent to your UWC email address being shared with them.</p>
-            <p>Your student number, or a UWC email address based on it, will not be shared with anyone in a pool unless you give explicit consent at a later stage.</p>
+            <p>UWC Commute Club collects your student or staff number, direction, suburb, and selected travel time to record pool interest.</p>
+            <p>For students, an email address can be derived from the student number and will not be shared unless the student gives explicit consent later.</p>
+            <p>A staff number cannot be used to derive an email address. Staff will therefore be asked for their UWC email address in a separate window and must consent to its storage and sharing when needed to facilitate a pool connection.</p>
             <p>Public pool tables show aggregate counts only. Admin access is token-protected.</p>
           </section>
 
           <label class="consent-check">
             <input type="checkbox" name="consent" value="yes" required>
-            <span>I consent to UWC Commute Club using my student number for this pool. I understand contact details will not be shared automatically.</span>
+            <span>I consent to UWC Commute Club using my student or staff number for this pool. I understand the contact-detail rules explained above.</span>
           </label>
 
           <div class="form-actions action-buttons">
@@ -228,6 +228,33 @@
           <p id="actionStatus" class="status" role="status"></p>
         </form>
       </section>
+
+      <dialog id="staffEmailDialog" class="staff-email-dialog" aria-labelledby="staffEmailTitle" aria-describedby="staffEmailDescription">
+        <form id="staffEmailForm" class="staff-email-form">
+          <div>
+            <p class="eyebrow">Staff contact details</p>
+            <h2 id="staffEmailTitle">Enter your UWC email address</h2>
+          </div>
+          <div id="staffEmailDescription" class="dialog-copy">
+            <p>A six-digit staff number does not allow UWC Commute Club to generate your email address automatically.</p>
+            <p>Your UWC email address contains your name and is personal information. If you submit it, you consent to UWC Commute Club storing it and sharing it when necessary to facilitate contact with people in a relevant pool.</p>
+            <p>Your address will not be shown in the public pool tables.</p>
+          </div>
+          <label>
+            UWC staff email address
+            <input name="emailAddress" type="email" required autocomplete="email" placeholder="name@uwc.ac.za">
+          </label>
+          <label class="consent-check">
+            <input type="checkbox" name="emailSharingConsent" value="yes" required>
+            <span>I consent to my UWC email address being stored and shared when necessary to facilitate a pool connection.</span>
+          </label>
+          <p id="staffEmailStatus" class="status" role="status"></p>
+          <div class="form-actions">
+            <button type="submit">Continue</button>
+            <button class="secondary-action" type="button" id="cancelStaffEmail">Cancel</button>
+          </div>
+        </form>
+      </dialog>
 
       <section class="contact-section" aria-labelledby="contactTitle">
         <h2 id="contactTitle">Feedback and Support</h2>

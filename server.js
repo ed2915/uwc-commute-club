@@ -23,6 +23,8 @@ const csvHeaders = [
   "area",
   "schedule",
   "student_number",
+  "email_address",
+  "email_sharing_consent",
   "status",
   "connection_requests",
   "connected_student_numbers",
@@ -176,7 +178,21 @@ async function handleSubmission(request, response) {
 
   const submissions = await readSubmissions();
   const studentNumber = normalizeStudentNumber(payload.studentNumber);
+  const isStaff = isValidStaffNumber(studentNumber);
+  const emailAddress = isStaff ? normalizeEmailAddress(payload.emailAddress) : "";
   const area = normalizeArea(payload.area);
+  const existingStaffEmail = submissions
+    .filter((submission) => identityKey(submission.student_number) === studentNumber)
+    .map((submission) => normalizeEmailAddress(submission.email_address))
+    .find(Boolean);
+
+  if (isStaff && existingStaffEmail && existingStaffEmail !== emailAddress) {
+    sendJson(response, 400, {
+      error: "That staff number is already associated with a different UWC email address. Contact the organiser for help."
+    });
+    return;
+  }
+
   const existingKeys = new Set(submissions.flatMap(submissionInterestKeys));
   const submittedAt = localTimestamp();
   const newConnectionRequests = [];
@@ -196,7 +212,7 @@ async function handleSubmission(request, response) {
       const targetMembers = group.filter((member) => identityKey(member.student_number) !== studentNumber);
       const targetStudentNumbers = targetMembers
         .map((member) => normalizeStudentNumber(member.student_number))
-        .filter(isValidStudentNumber);
+        .filter(isValidUwcNumber);
       const connectionRequests = normalizeStudentNumberList(targetStudentNumbers);
 
       if (targetStudentNumbers.length > 0) {
@@ -221,14 +237,16 @@ async function handleSubmission(request, response) {
         area,
         schedule,
         studentNumber,
+        emailAddress,
+        isStaff ? "yes" : "",
         targetStudentNumbers.length > 0 ? "1" : "0",
         connectionRequests,
         "",
         "",
         "",
         "",
-        "",
-        ""
+        isStaff && targetStudentNumbers.length > 0 ? "yes" : "",
+        isStaff && targetStudentNumbers.length > 0 ? submittedAt : ""
       ].map(csvCell).join(",");
     });
 
@@ -244,7 +262,8 @@ async function handleSubmission(request, response) {
     ok: true,
     added: rows.length,
     skippedDuplicates: payload.schedule.length - rows.length,
-    pendingConnections: newConnectionRequests.length
+    pendingConnections: newConnectionRequests.length,
+    staffContactStored: isStaff
   });
 }
 
@@ -254,8 +273,12 @@ function validateSubmission(payload) {
   if (!isText(payload.area)) return "Choose or enter a starting area";
   if (!Array.isArray(payload.schedule) || payload.schedule.length === 0) return "Choose at least one day and time";
   if (!payload.schedule.every(isScheduleCell)) return "One of the selected schedule times is invalid";
-  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid 7-digit student number";
-  if (payload.privacyConsent !== true) return "Consent is required to collect your student number";
+  if (!isValidUwcNumber(payload.studentNumber)) return "Enter a valid student or staff number";
+  if (isValidStaffNumber(payload.studentNumber)) {
+    if (!isValidUwcEmail(payload.emailAddress)) return "Enter your valid UWC staff email address";
+    if (payload.emailSharingConsent !== true) return "Consent is required to store and share your UWC email address when needed";
+  }
+  if (payload.privacyConsent !== true) return "Consent is required to collect your UWC number";
   return "";
 }
 
@@ -268,8 +291,8 @@ async function handleRemoveStudentNumber(request, response) {
     return;
   }
 
-  if (!isValidStudentNumber(payload.studentNumber)) {
-    sendJson(response, 400, { error: "Enter a valid 7-digit student number" });
+  if (!isValidUwcNumber(payload.studentNumber)) {
+    sendJson(response, 400, { error: "Enter a valid student or staff number" });
     return;
   }
 
@@ -350,7 +373,7 @@ async function handleConnectionRequest(request, response) {
   const targetMembers = group.filter((member) => identityKey(member.student_number) !== studentNumber);
   const targetStudentNumbers = targetMembers
     .map((member) => normalizeStudentNumber(member.student_number))
-    .filter(isValidStudentNumber);
+    .filter(isValidUwcNumber);
 
   if (targetMembers.length === 0) {
     sendJson(response, 400, { error: "There are no other people in that pool yet." });
@@ -366,6 +389,11 @@ async function handleConnectionRequest(request, response) {
 
     if (!isRequesterRoute) return submission;
 
+    const staffConsentApplies =
+      isValidStaffNumber(studentNumber) &&
+      isValidUwcEmail(submission.email_address) &&
+      submission.email_sharing_consent === "yes";
+
     return {
       ...submission,
       status: "1",
@@ -375,8 +403,8 @@ async function handleConnectionRequest(request, response) {
       ]),
       consent_email_sent_at: "",
       consent_email_last_sent_at: "",
-      consent_response: "",
-      consent_responded_at: ""
+      consent_response: staffConsentApplies ? "yes" : "",
+      consent_responded_at: staffConsentApplies ? localTimestamp() : ""
     };
   });
 
@@ -400,7 +428,7 @@ async function handleConnectionRequest(request, response) {
 
 function validateConnectionRequest(payload) {
   if (!payload || typeof payload !== "object") return "Connection request is missing";
-  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid 7-digit student number";
+  if (!isValidUwcNumber(payload.studentNumber)) return "Enter a valid student or staff number";
   if (!["to_uwc", "from_uwc"].includes(payload.direction)) return "Choose a travel direction";
   if (!isText(payload.area)) return "Choose a suburb";
   if (!isScheduleCell(payload.schedule)) return "Choose a valid day and time";
@@ -500,7 +528,7 @@ async function handlePopularRoutes(response) {
   for (const submission of submissions) {
     const area = normalizeArea(submission.area);
     if (!isActiveStatus(submission.status)) continue;
-    if (hasSixDigitStudentNumber(submission)) continue;
+    if (!isUsableSubmission(submission)) continue;
     if (!area || !["to_uwc", "from_uwc"].includes(submission.direction)) continue;
     uniqueUserKeys.add(submissionIdentityKey(submission));
 
@@ -533,8 +561,8 @@ async function handlePopularRoutes(response) {
 async function handleStudentPools(url, response) {
   const studentNumber = normalizeStudentNumber(url.searchParams.get("studentNumber"));
 
-  if (!isValidStudentNumber(studentNumber)) {
-    sendJson(response, 400, { error: "Enter a valid 7-digit student number" });
+  if (!isValidUwcNumber(studentNumber)) {
+    sendJson(response, 400, { error: "Enter a valid student or staff number" });
     return;
   }
 
@@ -679,6 +707,8 @@ function validateAdminPatch(payload) {
     "area",
     "schedule",
     "student_number",
+    "email_address",
+    "email_sharing_consent",
     "status",
     "connection_requests",
     "connected_student_numbers",
@@ -695,13 +725,15 @@ function validateAdminPatch(payload) {
   if ("direction" in payload && !["to_uwc", "from_uwc"].includes(payload.direction)) return "Direction is invalid";
   if ("area" in payload && !isText(payload.area)) return "Area is invalid";
   if ("schedule" in payload && !String(payload.schedule).split("|").filter(Boolean).every(isScheduleCell)) return "Schedule is invalid";
-  if ("student_number" in payload && !isValidStudentNumber(payload.student_number)) return "Student number is invalid";
+  if ("student_number" in payload && !isValidUwcNumber(payload.student_number)) return "UWC number is invalid";
+  if ("email_address" in payload && payload.email_address && !isValidUwcEmail(payload.email_address)) return "UWC email address is invalid";
+  if ("email_sharing_consent" in payload && !["", "yes"].includes(String(payload.email_sharing_consent || ""))) return "Email sharing consent is invalid";
   if ("status" in payload && !["0", "1", "2", "pending", "matched", "deleted", "archived"].includes(payload.status)) return "Status is invalid";
   if ("connection_requests" in payload && !isValidStudentNumberList(payload.connection_requests)) {
-    return "Connection requests must be 7-digit numbers separated by |";
+    return "Connection requests must be 6- or 7-digit UWC numbers separated by |";
   }
   if ("connected_student_numbers" in payload && !isValidConnectedStudentNumbers(payload.connected_student_numbers)) {
-    return "Connected student numbers must be 7-digit numbers separated by |";
+    return "Connected UWC numbers must be 6- or 7-digit numbers separated by |";
   }
   if ("consent_response" in payload && !["", "yes", "no"].includes(String(payload.consent_response || ""))) return "Consent response is invalid";
 
@@ -710,6 +742,7 @@ function validateAdminPatch(payload) {
   }
 
   if ("student_number" in payload) payload.student_number = normalizeStudentNumber(payload.student_number);
+  if ("email_address" in payload) payload.email_address = normalizeEmailAddress(payload.email_address);
   if ("area" in payload) payload.area = normalizeArea(payload.area);
   if ("status" in payload) payload.status = normalizeSubmissionStatus(payload.status);
   if ("connection_requests" in payload) {
@@ -737,8 +770,27 @@ function isValidStudentNumber(value) {
   return /^\d{7}$/.test(String(value || "").replace(/\D/g, ""));
 }
 
-function hasSixDigitStudentNumber(submission) {
-  return /^\d{6}$/.test(String(submission.student_number || "").replace(/\D/g, ""));
+function isValidStaffNumber(value) {
+  return /^\d{6}$/.test(String(value || "").replace(/\D/g, ""));
+}
+
+function isValidUwcNumber(value) {
+  return isValidStudentNumber(value) || isValidStaffNumber(value);
+}
+
+function normalizeEmailAddress(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidUwcEmail(value) {
+  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@uwc\.ac\.za$/i.test(normalizeEmailAddress(value));
+}
+
+function isUsableSubmission(submission) {
+  if (isValidStudentNumber(submission.student_number)) return true;
+  return isValidStaffNumber(submission.student_number) &&
+    isValidUwcEmail(submission.email_address) &&
+    submission.email_sharing_consent === "yes";
 }
 
 function normalizeSubmissionStatus(status) {
@@ -748,7 +800,7 @@ function normalizeSubmissionStatus(status) {
 function normalizeConnectedStudentNumbers(value) {
   return [...new Set(String(value || "")
     .split("|")
-    .filter(isValidStudentNumber)
+    .filter(isValidUwcNumber)
     .map(normalizeStudentNumber))]
     .sort()
     .join("|");
@@ -756,7 +808,7 @@ function normalizeConnectedStudentNumbers(value) {
 
 function isValidConnectedStudentNumbers(value) {
   const parts = String(value || "").split("|").filter((part) => part.trim() !== "");
-  return parts.length === 0 || parts.every(isValidStudentNumber);
+  return parts.length === 0 || parts.every(isValidUwcNumber);
 }
 
 function splitStudentNumberList(value) {
@@ -765,14 +817,14 @@ function splitStudentNumberList(value) {
 
 function normalizeStudentNumberList(values) {
   return [...new Set(values
-    .filter(isValidStudentNumber)
+    .filter(isValidUwcNumber)
     .map(normalizeStudentNumber))]
     .sort()
     .join("|");
 }
 
 function isValidStudentNumberList(value) {
-  return splitStudentNumberList(value).every(isValidStudentNumber);
+  return splitStudentNumberList(value).every(isValidUwcNumber);
 }
 
 function isScheduleCell(value) {
@@ -795,7 +847,7 @@ function routeGroupMembers(submissions, direction, area, schedule) {
 
   for (const submission of submissions) {
     if (!isActiveStatus(submission.status)) continue;
-    if (hasSixDigitStudentNumber(submission)) continue;
+    if (!isUsableSubmission(submission)) continue;
     if (submission.direction !== direction) continue;
     if (normalizeArea(submission.area).toLowerCase() !== normalizeArea(area).toLowerCase()) continue;
     if (!scheduleCells(submission).includes(schedule)) continue;
@@ -805,7 +857,8 @@ function routeGroupMembers(submissions, direction, area, schedule) {
     seen.add(key);
     members.push({
       submissionId: submission.id,
-      student_number: submission.student_number
+      student_number: submission.student_number,
+      email_address: submission.email_address
     });
   }
 

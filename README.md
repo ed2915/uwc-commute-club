@@ -109,36 +109,42 @@ the script cannot reconstruct participation that was subsequently removed.
 - Travelling to UWC or from UWC
 - Starting suburb from an alphabetic list
 - Travel schedule as exact day/time selections
-- Valid 7-digit student number, used to group pool interest
+- Valid 7-digit student number or 6-digit staff number, used to group pool interest
+- UWC staff email address and explicit sharing consent for staff submissions
 - Popular pool counts from captured submissions
 - Connection requests for organiser review
 
 ## Privacy Handling
 
-Student numbers are collected initially only to determine who falls
-into common pools. Student numbers, or UWC email addresses derived
-from them, must not be shared with other people in a pool without explicit
-consent at a later stage.
+Student and staff numbers are collected initially to determine who falls into
+common pools. A student's derived UWC email address must not be shared with
+other people in a pool without explicit consent at a later stage. Because a
+staff email address cannot be derived from a six-digit staff number, the staff
+member supplies it in a separate dialog and explicitly consents to its storage
+and sharing when needed to facilitate a pool connection.
 
 Before submission, users must tick an explicit consent checkbox confirming this
-limited purpose. Providing a student number is voluntary, but it is
-required to join pools and prevent duplicate entries.
+limited purpose. Staff must also confirm the separate email-sharing consent.
+Providing a UWC number is voluntary, but it is required to join pools and
+prevent duplicate entries.
 
-Public pages show aggregate pool counts only. Raw student numbers are
-available only through the token-protected admin tool. Route-interest records
+Public pages show aggregate pool counts only. Raw UWC numbers and staff email
+addresses are available only through the token-protected admin tool. Route-interest records
 should be deleted when they are no longer needed for the commute-club project.
-Students can also remove a selected pool-interest record from the action panel
-by entering their student number, choosing the same direction, suburb,
+Students and staff can also remove a selected pool-interest record from the action panel
+by entering their UWC number, choosing the same direction, suburb,
 and day/time, and using the remove button. This deletes only that selected
 pool interest from the active database. The app does not keep extra copies
 that continue storing a removed pool interest after that removal.
 
 Submissions are kept with `status`, `connection_requests`, and
 `connected_student_numbers` fields. New pool interests start with status
-`0`, meaning the student has added themself to that pool. If the same pool
-already has other active student numbers, the new row starts with
+`0`, meaning the person has added themself to that pool. If the same pool
+already has other active UWC numbers, the new row starts with
 status `1` and `connection_requests` records the existing numbers in that pool
-for organiser review. No contact details are shared automatically. The
+for organiser review. Student contact details are not shared automatically.
+Staff who supply an email address consent at submission to its use and sharing
+when needed for a relevant pool connection. The
 `consent-email` command prints yes/no consent links without showing those other
 numbers to the requester. After the requester consents and the organiser sends
 the target emails, `target-emails --apply` moves those numbers into

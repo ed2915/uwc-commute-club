@@ -369,6 +369,46 @@ label {
   font-size: 0.9rem;
 }
 
+.staff-email-dialog {
+  width: min(560px, calc(100% - 24px));
+  max-height: calc(100vh - 32px);
+  margin: auto;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-top: 5px solid var(--accent);
+  border-radius: 8px;
+  padding: 0;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 18px 50px rgb(12 35 27 / 24%);
+}
+
+.staff-email-dialog::backdrop {
+  background: rgb(10 24 19 / 64%);
+}
+
+.staff-email-form {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+
+.staff-email-form h2,
+.staff-email-form p {
+  margin-top: 0;
+}
+
+.dialog-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.dialog-copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
 .consent-check {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
@@ -868,6 +908,10 @@ button:disabled {
   .uwc-logo {
     width: 56px;
     height: 56px;
+  }
+
+  .staff-email-form {
+    padding: 16px;
   }
 
   .popular-routes,

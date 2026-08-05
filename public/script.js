@@ -42,6 +42,11 @@ const studentNumberInput = actionForm.elements.studentNumber;
 const addInterestButton = document.querySelector("#addInterest");
 const removeInterestButton = document.querySelector("#removeInterest");
 const poolLookupStudentNumberInput = poolLookupForm.elements.studentNumber;
+const staffEmailDialog = document.querySelector("#staffEmailDialog");
+const staffEmailForm = document.querySelector("#staffEmailForm");
+const staffEmailStatus = document.querySelector("#staffEmailStatus");
+const cancelStaffEmailButton = document.querySelector("#cancelStaffEmail");
+let pendingStaffPayload = null;
 const selectedHeatmapDays = {
   to_uwc: "mon",
   from_uwc: "mon"
@@ -65,6 +70,11 @@ poolLookupForm.addEventListener("submit", async (event) => {
 
 addInterestButton.addEventListener("click", () => submitSelectedAction("add"));
 removeInterestButton.addEventListener("click", () => submitSelectedAction("remove"));
+staffEmailForm.addEventListener("submit", submitStaffEmail);
+cancelStaffEmailButton.addEventListener("click", closeStaffEmailDialog);
+staffEmailDialog.addEventListener("cancel", () => {
+  pendingStaffPayload = null;
+});
 
 async function submitSelectedAction(action) {
   setActionStatus("", "");
@@ -76,6 +86,20 @@ async function submitSelectedAction(action) {
     return;
   }
 
+  if (action === "add" && isValidStaffNumber(payload.studentNumber)) {
+    pendingStaffPayload = payload;
+    staffEmailForm.reset();
+    setStaffEmailStatus("", "");
+    staffEmailDialog.showModal();
+    staffEmailForm.elements.emailAddress.focus();
+    return;
+  }
+
+  await performSelectedAction(action, payload);
+}
+
+async function performSelectedAction(action, payload) {
+
   setActionButtonsDisabled(true);
 
   try {
@@ -86,6 +110,42 @@ async function submitSelectedAction(action) {
   } finally {
     setActionButtonsDisabled(false);
   }
+}
+
+async function submitStaffEmail(event) {
+  event.preventDefault();
+  if (!pendingStaffPayload) {
+    closeStaffEmailDialog();
+    return;
+  }
+
+  const formData = new FormData(staffEmailForm);
+  const emailAddress = clean(formData.get("emailAddress")).toLowerCase();
+  const emailSharingConsent = formData.get("emailSharingConsent") === "yes";
+
+  if (!isValidUwcEmail(emailAddress)) {
+    setStaffEmailStatus("Enter your valid UWC staff email address.", "error");
+    return;
+  }
+
+  if (!emailSharingConsent) {
+    setStaffEmailStatus("Please provide consent before continuing.", "error");
+    return;
+  }
+
+  const payload = {
+    ...pendingStaffPayload,
+    emailAddress,
+    emailSharingConsent
+  };
+  pendingStaffPayload = null;
+  staffEmailDialog.close();
+  await performSelectedAction("add", payload);
+}
+
+function closeStaffEmailDialog() {
+  pendingStaffPayload = null;
+  staffEmailDialog.close();
 }
 
 async function addSelectedInterest(payload) {
@@ -106,6 +166,8 @@ async function addSelectedInterest(payload) {
 
   if (result.added === 0) {
     setActionStatus("You were already in that pool.", "success");
+  } else if (result.pendingConnections > 0 && result.staffContactStored) {
+    setActionStatus("Added you to that pool. Your staff email consent has been recorded, so the organiser can facilitate contact with the other people in the pool.", "success");
   } else if (result.pendingConnections > 0) {
     setActionStatus("Added you to that pool. Because other people are already in it, the organiser may email you to ask for consent before sharing your UWC email address.", "success");
   } else {
@@ -133,7 +195,7 @@ async function removeSelectedInterest(payload) {
     setActionStatus("Removed you from that pool.", "success");
     loadPopularRoutes();
   } else {
-    setActionStatus("No matching pool interest was found for that student number.", "success");
+    setActionStatus("No matching pool interest was found for that UWC number.", "success");
   }
 }
 
@@ -153,7 +215,7 @@ function validateSelectedRoute(payload) {
   if (!["to_uwc", "from_uwc"].includes(payload.direction)) return "Choose a travel direction.";
   if (!payload.area) return "Choose a suburb.";
   if (!payload.schedule) return "Choose a day and time.";
-  if (!isValidStudentNumber(payload.studentNumber)) return "Enter a valid 7-digit student number.";
+  if (!isValidUwcNumber(payload.studentNumber)) return "Enter a valid student or staff number.";
   if (!payload.consent) return "Please consent before continuing.";
   return "";
 }
@@ -167,8 +229,8 @@ async function lookupStudentPools() {
   setPoolLookupStatus("", "");
   const studentNumber = normalizeStudentNumber(poolLookupStudentNumberInput.value);
 
-  if (!isValidStudentNumber(studentNumber)) {
-    setPoolLookupStatus("Enter a valid 7-digit student number.", "error");
+  if (!isValidUwcNumber(studentNumber)) {
+    setPoolLookupStatus("Enter a valid student or staff number.", "error");
     return;
   }
 
@@ -184,7 +246,7 @@ async function lookupStudentPools() {
     }
 
     renderStudentPools(result.pools || []);
-    setPoolLookupStatus(result.pools?.length ? "Pools loaded." : "No pools found for that student number.", "success");
+    setPoolLookupStatus(result.pools?.length ? "Pools loaded." : "No pools found for that UWC number.", "success");
   } catch (error) {
     setPoolLookupStatus(error.message, "error");
   } finally {
@@ -211,7 +273,7 @@ function renderStudentPools(pools) {
         </div>
         <div>
           <dt>Current interest</dt>
-          <dd>${pool.memberCount} student${pool.memberCount === 1 ? "" : "s"}</dd>
+          <dd>${pool.memberCount} ${pool.memberCount === 1 ? "person" : "people"}</dd>
         </div>
       </dl>
     </article>
@@ -344,8 +406,16 @@ function normalizeStudentNumber(value) {
     .slice(0, 7);
 }
 
-function isValidStudentNumber(value) {
-  return /^\d{7}$/.test(value);
+function isValidStaffNumber(value) {
+  return /^\d{6}$/.test(value);
+}
+
+function isValidUwcNumber(value) {
+  return /^\d{6,7}$/.test(value);
+}
+
+function isValidUwcEmail(value) {
+  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@uwc\.ac\.za$/i.test(String(value || "").trim());
 }
 
 function escapeHtml(value) {
@@ -365,4 +435,9 @@ function setActionStatus(message, tone) {
 function setPoolLookupStatus(message, tone) {
   poolLookupStatusMessage.textContent = message;
   poolLookupStatusMessage.dataset.tone = tone;
+}
+
+function setStaffEmailStatus(message, tone) {
+  staffEmailStatus.textContent = message;
+  staffEmailStatus.dataset.tone = tone;
 }
