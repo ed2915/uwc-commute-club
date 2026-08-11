@@ -7,6 +7,7 @@ const days = [
 ];
 
 const timeSlots = [
+  "05:30",
   "06:30",
   "06:45",
   "07:00",
