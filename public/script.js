@@ -287,8 +287,8 @@ function formatPoolRoute(pool) {
 
 function formatPoolStatus(pool) {
   if (pool.status === "0") return "added to pool";
-  if (pool.status === "1") return "awaiting consent email";
-  if (pool.status === "2") return "connected";
+  if (pool.status === "1") return "connection in progress";
+  if (pool.status === "2") return "contact details shared";
   return pool.status || "pending";
 }
 

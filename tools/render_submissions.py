@@ -520,6 +520,7 @@ def print_target_emails(
         print(f"You may contact them at: {requester_email}")
         print()
         print("You are not required to respond if you do not want to.")
+        print("The pool does not assign driver or passenger roles. Please discuss directly whether anyone can offer a lift and agree on any arrangements.")
         print()
         print_safety_and_responsibility_note()
         print()
