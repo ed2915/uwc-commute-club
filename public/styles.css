@@ -669,11 +669,31 @@ button:disabled {
 
 .heatmap-wrap {
   width: 100%;
-  overflow-x: auto;
+  max-height: clamp(280px, 42vh, 420px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
   -webkit-overflow-scrolling: touch;
+  scrollbar-color: #8798ad #edf1f6;
+  scrollbar-width: thin;
+}
+
+.heatmap-wrap::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.heatmap-wrap::-webkit-scrollbar-track {
+  background: #edf1f6;
+}
+
+.heatmap-wrap::-webkit-scrollbar-thumb {
+  border: 2px solid #edf1f6;
+  border-radius: 5px;
+  background: #8798ad;
 }
 
 .heatmap-grid {
@@ -700,6 +720,26 @@ button:disabled {
   background: var(--soft-blue);
   font-size: 0.84rem;
   font-weight: 800;
+}
+
+.heatmap-corner,
+.heatmap-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.heatmap-corner,
+.heatmap-suburb {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: 1px 0 0 var(--line);
+}
+
+.heatmap-corner {
+  z-index: 3;
 }
 
 .heatmap-head {
@@ -867,6 +907,7 @@ button:disabled {
   }
 
   .heatmap-wrap {
+    max-height: clamp(240px, 44svh, 340px);
     margin-inline: -12px;
     border-right: 0;
     border-left: 0;
@@ -877,10 +918,6 @@ button:disabled {
   .heatmap-corner,
   .heatmap-suburb {
     font-size: 0.78rem;
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    box-shadow: 1px 0 0 var(--line);
   }
 
   .heatmap-corner,

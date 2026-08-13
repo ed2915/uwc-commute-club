@@ -351,7 +351,12 @@ function renderRouteTable(container, routes, direction, maxInterest) {
     `;
   }).join("");
   const grid = visibleRoutes.length === 0 ? `<p class="empty-routes">No pools for ${escapeHtml(formatDay(selectedDay))} yet.</p>` : `
-    <div class="heatmap-wrap">
+    <div
+      class="heatmap-wrap"
+      role="region"
+      tabindex="0"
+      aria-label="${direction === "to_uwc" ? "To UWC" : "From UWC"} popular pools for ${escapeHtml(formatDay(selectedDay))}; scroll to view more suburbs and times"
+    >
       <div class="heatmap-grid" style="grid-template-columns: minmax(116px, 1fr) repeat(${schedules.length}, 24px);">
         <div class="heatmap-corner">Suburb</div>
         ${headerCells}
