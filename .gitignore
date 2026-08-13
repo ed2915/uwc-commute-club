@@ -1,5 +1,10 @@
 node_modules/
 data/*.csv
+__pycache__/
+*.csv.aes
+recovered-submissions.csv
+backups/
+logs/
 .DS_Store
 folder_notes.txt
 consent_email.txt

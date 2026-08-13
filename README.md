@@ -80,6 +80,57 @@ certificate installer or add `--insecure` to the command on your own machine.
 Set a private `ADMIN_TOKEN` environment variable on the Render service before using the tool.
 The admin endpoints return 404 until `ADMIN_TOKEN` is configured.
 
+## Encrypted Daily Backups
+
+`tools/backup_render_submissions.py` fetches the live submission rows, rebuilds
+the CSV in memory, and encrypts it with AES-256-GCM before writing anything to
+disk. The dedicated 256-bit encryption key is held in macOS Keychain under
+`za.ac.uwc.commute-club.backup-key`.
+
+The installed LaunchAgent runs daily maintenance at 20:00 local time and at
+login. It first creates at most one encrypted backup per day, retains backups
+for 30 days, and writes them to the protected directory
+`/Users/ed/Ideas/carpooler/backups`. The directory has mode `700` and backup files have
+mode `600`. Only after a backup succeeds, it removes unanswered pool requests
+that reached the three-reminder limit at least three days earlier. The matching
+historical connection-request row is removed as part of the same cleanup.
+
+Useful commands, using the Python environment that contains `cryptography`:
+
+```sh
+source ~/myenv/bin/activate
+
+# Create today's backup manually. A duplicate same-day run is skipped.
+python3 tools/backup_render_submissions.py --insecure backup
+
+# Preview unanswered requests that are old enough for automatic removal.
+UWC_ADMIN_TOKEN="$(cat ~/.config/uwc-commute-club/admin-token)" \
+  python3 tools/render_submissions.py --insecure expire-unanswered-consent
+
+# Run the same backup-first maintenance sequence used by the schedule.
+python3 tools/backup_render_submissions.py --insecure daily-maintenance
+
+# List and cryptographically verify backups.
+python3 tools/backup_render_submissions.py list
+python3 tools/backup_render_submissions.py verify
+
+# Recover one backup to a protected plaintext CSV.
+python3 tools/backup_render_submissions.py decrypt \
+  backups/submissions-YYYYMMDDTHHMMSS-SAST.csv.aes \
+  --output ~/recovered-submissions.csv
+
+# Reinstall or update the daily 20:00 maintenance schedule.
+python3 tools/backup_render_submissions.py --insecure install-schedule
+```
+
+The scheduled-job log is `/Users/ed/Ideas/carpooler/logs/backup.log`. The
+LaunchAgent definition is
+`~/Library/LaunchAgents/za.ac.uwc.commute-club.backup.plist`.
+
+Do not delete or replace the Keychain encryption key while retained backups
+still need to be recoverable. A decrypted recovery CSV contains personal
+information and should be deleted as soon as recovery work is complete.
+
 ## Participation Chart
 
 Activate the Python environment containing Matplotlib, set `UWC_ADMIN_TOKEN`,
@@ -134,8 +185,11 @@ should be deleted when they are no longer needed for the commute-club project.
 Students and staff can also remove a selected pool-interest record from the action panel
 by entering their UWC number, choosing the same direction, suburb,
 and day/time, and using the remove button. This deletes only that selected
-pool interest from the active database. The app does not keep extra copies
-that continue storing a removed pool interest after that removal.
+pool interest from the active database. Encrypted disaster-recovery backups
+retain deleted records for up to 30 days, and Render snapshots may retain them
+for Render's snapshot-retention period. Recovery copies are used only to
+restore the service after data loss; they are not used for matching or contact
+sharing.
 
 Submissions are kept with `status`, `connection_requests`, and
 `connected_student_numbers` fields. New pool interests start with status
@@ -155,8 +209,10 @@ message to `consent_email.txt` in the project directory. After the organiser
 confirms that the email was sent, the script records `consent_email_sent_at`.
 That original timestamp is retained. While a response remains outstanding,
 `review-actions` offers a reminder every three days on a schedule anchored to
-the original send time. Confirmed reminders update
-`consent_email_last_sent_at` so the same reminder is not offered twice.
+the original send time, up to a maximum of three reminders. Confirmed reminders
+update `consent_email_last_sent_at` and `consent_reminder_count` so the same
+reminder is not offered twice and no further reminder is offered after the
+third.
 Another pending submission belonging to the same person remains deferred. The
 local text file is removed after sending is confirmed so it does not become an
 extra retained copy. An intentional manual resend requires

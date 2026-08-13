@@ -24,6 +24,7 @@ REMOVAL_EMAIL_FILE = Path(__file__).resolve().parent.parent / "removal_email.txt
 SAST = ZoneInfo("Africa/Johannesburg")
 CONSENT_REMINDER_INTERVAL = timedelta(days=3)
 MAX_CONSENT_REMINDERS = 3
+UNANSWERED_CONSENT_EXPIRY_DELAY = timedelta(days=3)
 FIELDS = [
     "id",
     "submitted_at",
@@ -216,6 +217,15 @@ def main() -> int:
         "review-actions",
         help="Interactively review consent and target emails that need organiser approval.",
     )
+    expiry_parser = subparsers.add_parser(
+        "expire-unanswered-consent",
+        help="Find unanswered requests that expired three days after their final reminder.",
+    )
+    expiry_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Delete expired pool and connection-request rows. Without this, only prints them.",
+    )
 
     args = parser.parse_args()
 
@@ -300,6 +310,9 @@ def main() -> int:
         elif args.command == "review-actions":
             submissions = client.list_submissions()
             review_actions(client, submissions)
+        elif args.command == "expire-unanswered-consent":
+            submissions = client.list_submissions()
+            expire_unanswered_consent(client, submissions, apply=args.apply)
     except AdminError as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
@@ -623,6 +636,94 @@ def consent_reminder_due(
         consent_reminder_count(row) < MAX_CONSENT_REMINDERS
         and (now or datetime.now(SAST)) >= next_consent_reminder_at(row)
     )
+
+
+def unanswered_consent_expires_at(row: dict[str, str]) -> datetime:
+    if consent_reminder_count(row) < MAX_CONSENT_REMINDERS:
+        raise AdminError("The final consent reminder has not been sent.")
+    return parse_stored_timestamp(
+        row.get("consent_email_last_sent_at", "")
+    ) + UNANSWERED_CONSENT_EXPIRY_DELAY
+
+
+def expired_unanswered_consent_rows(
+    submissions: list[dict[str, str]],
+    now: datetime | None = None,
+) -> list[dict[str, str]]:
+    current_time = now or datetime.now(SAST)
+    expired = []
+    for original in submissions:
+        row = normalize_submission(original)
+        if row.get("status") != "1":
+            continue
+        if not split_student_numbers(row.get("connection_requests", "")):
+            continue
+        if row.get("consent_response"):
+            continue
+        if consent_reminder_count(row) < MAX_CONSENT_REMINDERS:
+            continue
+        if current_time >= unanswered_consent_expires_at(row):
+            expired.append(row)
+    return sorted(expired, key=lambda row: row.get("consent_email_last_sent_at", ""))
+
+
+def matching_connection_request_rows(
+    row: dict[str, str],
+    requests: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    student_number = normalize_student_number(row.get("student_number", ""))
+    area_key = normalize_area_key(row.get("area", ""))
+    schedules = schedule_cells(row)
+    return [
+        request
+        for request in requests
+        if normalize_student_number(request.get("student_number", "")) == student_number
+        and request.get("direction", "") == row.get("direction", "")
+        and normalize_area_key(request.get("area", "")) == area_key
+        and request.get("schedule", "") in schedules
+    ]
+
+
+def expire_unanswered_consent(
+    client: AdminClient,
+    submissions: list[dict[str, str]],
+    *,
+    apply: bool,
+    now: datetime | None = None,
+) -> list[dict[str, str]]:
+    current_time = now or datetime.now(SAST)
+    expired = expired_unanswered_consent_rows(submissions, current_time)
+    print(f"Expired unanswered consent rows: {len(expired)}")
+    if expired:
+        print_table(expired)
+    if not apply:
+        print("Dry run only. Use --apply to delete these rows.")
+        return expired
+
+    deleted = []
+    for candidate in expired:
+        current_rows = client.list_submissions()
+        try:
+            current = find_submission(current_rows, candidate["id"])
+        except AdminError:
+            print(f"Skipped {candidate['id']}: it has already been removed.")
+            continue
+        if not expired_unanswered_consent_rows([current], current_time):
+            print(f"Skipped {candidate['id']}: it is no longer eligible for expiry.")
+            continue
+
+        requests = client.list_connection_requests()
+        for request in matching_connection_request_rows(current, requests):
+            client.delete_connection_request(request["id"])
+            print(f"Deleted connection request {request['id']}")
+        client.delete_submission(current["id"])
+        deleted.append(current)
+        print(
+            f"Deleted expired unanswered pool {current['id']} "
+            f"for {current.get('student_number', '')}"
+        )
+    print(f"Expired unanswered pools deleted: {len(deleted)}")
+    return deleted
 
 
 def format_local_datetime(value: datetime) -> str:
