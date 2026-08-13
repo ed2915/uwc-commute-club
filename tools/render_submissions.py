@@ -23,6 +23,7 @@ CONSENT_EMAIL_FILE = Path(__file__).resolve().parent.parent / "consent_email.txt
 REMOVAL_EMAIL_FILE = Path(__file__).resolve().parent.parent / "removal_email.txt"
 SAST = ZoneInfo("Africa/Johannesburg")
 CONSENT_REMINDER_INTERVAL = timedelta(days=3)
+MAX_CONSENT_REMINDERS = 3
 FIELDS = [
     "id",
     "submitted_at",
@@ -38,6 +39,7 @@ FIELDS = [
     "consent_token",
     "consent_email_sent_at",
     "consent_email_last_sent_at",
+    "consent_reminder_count",
     "consent_response",
     "consent_responded_at",
 ]
@@ -123,6 +125,7 @@ def main() -> int:
     patch_parser.add_argument("--consent-token")
     patch_parser.add_argument("--consent-email-sent-at")
     patch_parser.add_argument("--consent-email-last-sent-at")
+    patch_parser.add_argument("--consent-reminder-count", choices=["0", "1", "2", "3"])
     patch_parser.add_argument("--consent-response", choices=["", "yes", "no"])
     patch_parser.add_argument("--consent-responded-at")
 
@@ -388,6 +391,7 @@ def build_patch(args: argparse.Namespace) -> dict[str, str]:
         "consent_token",
         "consent_email_sent_at",
         "consent_email_last_sent_at",
+        "consent_reminder_count",
         "consent_response",
         "consent_responded_at",
     ]:
@@ -406,6 +410,8 @@ def write_consent_email(
 ) -> dict[str, str]:
     row = find_submission(submissions, submission_id)
     reminder = reminder or bool(row.get("consent_email_sent_at"))
+    if reminder and consent_reminder_count(row) >= MAX_CONSENT_REMINDERS:
+        raise AdminError("The maximum of three consent reminders has already been sent.")
     if not is_usable_submission(row):
         raise AdminError("This row does not have a usable student or staff identity.")
     if row.get("status") != "1" or not row.get("connection_requests"):
@@ -587,11 +593,36 @@ def next_consent_reminder_at(row: dict[str, str]) -> datetime:
     return first_sent + CONSENT_REMINDER_INTERVAL * (completed_intervals + 1)
 
 
+def consent_reminder_count(row: dict[str, str]) -> int:
+    stored = str(row.get("consent_reminder_count", "")).strip()
+    if stored:
+        try:
+            return min(max(int(stored), 0), MAX_CONSENT_REMINDERS)
+        except ValueError as error:
+            raise AdminError(f"Invalid consent reminder count: {stored}") from error
+
+    first_value = row.get("consent_email_sent_at", "")
+    last_value = row.get("consent_email_last_sent_at", "")
+    if not first_value or not last_value:
+        return 0
+    elapsed = max(
+        parse_stored_timestamp(last_value) - parse_stored_timestamp(first_value),
+        timedelta(0),
+    )
+    return min(
+        int(elapsed.total_seconds() // CONSENT_REMINDER_INTERVAL.total_seconds()),
+        MAX_CONSENT_REMINDERS,
+    )
+
+
 def consent_reminder_due(
     row: dict[str, str],
     now: datetime | None = None,
 ) -> bool:
-    return (now or datetime.now(SAST)) >= next_consent_reminder_at(row)
+    return (
+        consent_reminder_count(row) < MAX_CONSENT_REMINDERS
+        and (now or datetime.now(SAST)) >= next_consent_reminder_at(row)
+    )
 
 
 def format_local_datetime(value: datetime) -> str:
@@ -609,8 +640,13 @@ def confirm_consent_email_sent(
 
     sent_at = local_timestamp()
     patch = {"consent_email_last_sent_at": sent_at}
-    if not reminder:
+    if reminder:
+        submissions = client.list_submissions()
+        row = find_submission(submissions, submission_id)
+        patch["consent_reminder_count"] = str(consent_reminder_count(row) + 1)
+    else:
         patch["consent_email_sent_at"] = sent_at
+        patch["consent_reminder_count"] = "0"
     result = client.patch_submission(submission_id, patch)
     CONSENT_EMAIL_FILE.unlink(missing_ok=True)
     label = "reminder" if reminder else "consent email"
@@ -651,6 +687,10 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
         row for row in awaiting_consent
         if consent_reminder_due(row)
     ]
+    reminder_limit_reached = [
+        row for row in awaiting_consent
+        if consent_reminder_count(row) >= MAX_CONSENT_REMINDERS
+    ]
     consent_candidates = [
         row for row in rows
         if row.get("status") == "1"
@@ -687,6 +727,7 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
     print(f"Unsent consent emails: {len(pending_consent)}")
     print(f"Awaiting consent responses: {len(awaiting_consent)}")
     print(f"Consent reminders due: {len(due_reminders)}")
+    print(f"Consent reminder limit reached: {len(reminder_limit_reached)}")
     print(f"Deferred consent emails for people already awaiting: {len(deferred_consent)}")
     print(f"Approved target email batches: {len(approved_targets)}")
     print(f"Rejected consent rows needing cleanup: {len(rejected_requests)}")
@@ -714,6 +755,7 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
             print_action_row(row)
             print(f"  First sent: {row.get('consent_email_sent_at', '')}")
             print(f"  Last sent: {row.get('consent_email_last_sent_at') or row.get('consent_email_sent_at', '')}")
+            print(f"  Reminders sent: {consent_reminder_count(row)} of {MAX_CONSENT_REMINDERS}")
             if ask_yes_no("Generate this consent reminder now?"):
                 print()
                 write_consent_email(
@@ -730,12 +772,17 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
         print()
         print("Awaiting consent responses")
         print("--------------------------")
-        print("These rows are awaiting responses. Reminders are offered every three days from the first send time.")
+        print("These rows are awaiting responses. Up to three reminders are offered at three-day intervals.")
         for row in awaiting_consent:
             print_action_row(row)
             print(f"  First sent: {row.get('consent_email_sent_at', '')}")
             print(f"  Last sent: {row.get('consent_email_last_sent_at') or row.get('consent_email_sent_at', '')}")
-            print(f"  Next reminder: {format_local_datetime(next_consent_reminder_at(row))}")
+            count = consent_reminder_count(row)
+            print(f"  Reminders sent: {count} of {MAX_CONSENT_REMINDERS}")
+            if count >= MAX_CONSENT_REMINDERS:
+                print("  Next reminder: none (limit reached)")
+            else:
+                print(f"  Next reminder: {format_local_datetime(next_consent_reminder_at(row))}")
 
     if deferred_consent:
         print()
@@ -807,6 +854,7 @@ def review_actions(client: AdminClient, submissions: list[dict[str, str]]) -> No
                     "connection_requests": normalize_connected_student_numbers("|".join(target_numbers)),
                     "consent_email_sent_at": "",
                     "consent_email_last_sent_at": "",
+                    "consent_reminder_count": "0",
                     "consent_response": "",
                     "consent_responded_at": "",
                 })

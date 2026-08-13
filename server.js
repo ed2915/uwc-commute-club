@@ -31,6 +31,7 @@ const csvHeaders = [
   "consent_token",
   "consent_email_sent_at",
   "consent_email_last_sent_at",
+  "consent_reminder_count",
   "consent_response",
   "consent_responded_at",
 ];
@@ -250,6 +251,7 @@ async function handleSubmission(request, response) {
         "",
         "",
         "",
+        "0",
         isStaff && targetStudentNumbers.length > 0 ? "yes" : "",
         isStaff && targetStudentNumbers.length > 0 ? submittedAt : ""
       ].map(csvCell).join(",");
@@ -408,6 +410,7 @@ async function handleConnectionRequest(request, response) {
       ]),
       consent_email_sent_at: "",
       consent_email_last_sent_at: "",
+      consent_reminder_count: "0",
       consent_response: staffConsentApplies ? "yes" : "",
       consent_responded_at: staffConsentApplies ? localTimestamp() : ""
     };
@@ -746,6 +749,7 @@ function validateAdminPatch(payload) {
     "consent_token",
     "consent_email_sent_at",
     "consent_email_last_sent_at",
+    "consent_reminder_count",
     "consent_response",
     "consent_responded_at",
   ]);
@@ -767,6 +771,9 @@ function validateAdminPatch(payload) {
     return "Connected UWC numbers must be 6- or 7-digit numbers separated by |";
   }
   if ("consent_response" in payload && !["", "yes", "no"].includes(String(payload.consent_response || ""))) return "Consent response is invalid";
+  if ("consent_reminder_count" in payload && !/^[0-3]$/.test(String(payload.consent_reminder_count))) {
+    return "Consent reminder count must be between 0 and 3";
+  }
 
   for (const field of fields) {
     payload[field] = String(payload[field] || "").trim();
