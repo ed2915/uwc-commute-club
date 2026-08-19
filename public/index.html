@@ -216,7 +216,7 @@
             <p>For students, an email address can be derived from the student number and will not be shared unless the student gives explicit consent later.</p>
             <p>A staff number cannot be used to derive an email address. Staff will therefore be asked for their UWC email address in a separate window and must consent to its storage and sharing when needed to facilitate a pool connection.</p>
             <p>Public pool tables show aggregate counts only. Admin access is token-protected.</p>
-            <p>Removing a pool deletes it from the active database. Encrypted disaster-recovery backups and Render snapshots may retain it temporarily under their limited retention periods. Recovery copies are used only after data loss, not for matching or contact sharing.</p>
+            <p>Removing a pool deletes it from the active database. You may optionally provide a reason for leaving; that reason is stored separately without your UWC number or email address. Encrypted disaster-recovery backups and Render snapshots may retain the removed pool temporarily under their limited retention periods. Recovery copies are used only after data loss, not for matching or contact sharing.</p>
           </section>
 
           <label class="consent-check">
@@ -233,6 +233,34 @@
           <p id="actionStatus" class="status" role="status"></p>
         </form>
       </section>
+
+      <dialog id="removalReasonDialog" class="staff-email-dialog removal-reason-dialog" aria-labelledby="removalReasonTitle" aria-describedby="removalReasonDescription">
+        <form id="removalReasonForm" class="staff-email-form">
+          <div>
+            <p class="eyebrow">Leaving a pool</p>
+            <h2 id="removalReasonTitle">Why are you leaving?</h2>
+          </div>
+          <div id="removalReasonDescription" class="dialog-copy">
+            <p>This optional answer helps us understand whether the Commute Club is helping people form carpools.</p>
+            <p>Your answer is stored separately and is not linked to your UWC number or email address.</p>
+          </div>
+          <label>
+            Reason (optional)
+            <select name="removalReason">
+              <option value="">Prefer not to say</option>
+              <option value="carpool_formed">I formed or joined a carpool</option>
+              <option value="plans_changed">My travel plans changed</option>
+              <option value="no_longer_commuting">I no longer need this commute</option>
+              <option value="joined_by_mistake">I joined this pool by mistake</option>
+              <option value="other">Other reason</option>
+            </select>
+          </label>
+          <div class="form-actions">
+            <button class="secondary-action" type="button" id="cancelRemovalReason">Cancel</button>
+            <button type="submit">Remove me from this pool</button>
+          </div>
+        </form>
+      </dialog>
 
       <dialog id="staffEmailDialog" class="staff-email-dialog" aria-labelledby="staffEmailTitle" aria-describedby="staffEmailDescription">
         <form id="staffEmailForm" class="staff-email-form">

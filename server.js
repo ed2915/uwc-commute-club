@@ -9,6 +9,7 @@ const publicDir = join(__dirname, "public");
 const dataDir = process.env.DATA_DIR || join(__dirname, "data");
 const submissionsFile = join(dataDir, "submissions.csv");
 const connectionRequestsFile = join(dataDir, "connection_requests.csv");
+const removalEventsFile = join(dataDir, "removal_events.csv");
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || (process.env.RENDER ? "0.0.0.0" : "127.0.0.1");
 const adminToken = process.env.ADMIN_TOKEN || "";
@@ -49,6 +50,23 @@ const connectionRequestHeaders = [
   "notes",
 ];
 
+const removalEventHeaders = [
+  "removed_at",
+  "direction",
+  "area",
+  "schedule",
+  "reason",
+];
+
+const removalReasons = new Set([
+  "",
+  "carpool_formed",
+  "plans_changed",
+  "no_longer_commuting",
+  "joined_by_mistake",
+  "other",
+]);
+
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -60,6 +78,7 @@ const contentTypes = {
 await mkdir(dataDir, { recursive: true });
 await ensureCsvFile();
 await ensureConnectionRequestsFile();
+await ensureRemovalEventsFile();
 
 createServer(async (request, response) => {
   try {
@@ -107,6 +126,11 @@ createServer(async (request, response) => {
 
     if (url.pathname === "/api/admin/connection-requests") {
       await handleAdminConnectionRequests(request, response);
+      return;
+    }
+
+    if (url.pathname === "/api/admin/removal-events") {
+      await handleAdminRemovalEvents(request, response);
       return;
     }
 
@@ -158,6 +182,14 @@ async function ensureConnectionRequestsFile() {
     await stat(connectionRequestsFile);
   } catch {
     await appendFile(connectionRequestsFile, `${connectionRequestHeaders.join(",")}\n`);
+  }
+}
+
+async function ensureRemovalEventsFile() {
+  try {
+    await stat(removalEventsFile);
+  } catch {
+    await appendFile(removalEventsFile, `${removalEventHeaders.join(",")}\n`);
   }
 }
 
@@ -307,6 +339,7 @@ async function handleRemoveStudentNumber(request, response) {
   const direction = payload.direction;
   const area = normalizeArea(payload.area);
   const schedulesToRemove = new Set(Array.isArray(payload.schedule) ? payload.schedule : []);
+  const removalReason = String(payload.removalReason || "").trim();
 
   if (!["to_uwc", "from_uwc"].includes(direction)) {
     sendJson(response, 400, { error: "Choose a travel direction" });
@@ -323,8 +356,14 @@ async function handleRemoveStudentNumber(request, response) {
     return;
   }
 
+  if (!removalReasons.has(removalReason)) {
+    sendJson(response, 400, { error: "Choose a valid removal reason" });
+    return;
+  }
+
   const submissions = await readSubmissions();
   let deleted = 0;
+  const removedSchedules = [];
   const nextSubmissions = submissions
     .map((submission) => {
       const isTarget =
@@ -338,6 +377,7 @@ async function handleRemoveStudentNumber(request, response) {
         .filter((schedule) => !schedulesToRemove.has(schedule));
       const removedCount = scheduleCells(submission).length - remainingSchedule.length;
       deleted += removedCount;
+      removedSchedules.push(...scheduleCells(submission).filter((schedule) => schedulesToRemove.has(schedule)));
 
       return { ...submission, schedule: remainingSchedule.join("|") };
     })
@@ -345,6 +385,19 @@ async function handleRemoveStudentNumber(request, response) {
 
   if (deleted > 0) {
     await writeSubmissions(nextSubmissions);
+    const removedAt = localTimestamp();
+    const rows = removedSchedules.map((schedule) => [
+      removedAt,
+      direction,
+      area,
+      schedule,
+      removalReason,
+    ].map(csvCell).join(","));
+    try {
+      await appendFile(removalEventsFile, `${rows.join("\n")}\n`);
+    } catch (error) {
+      console.error("Could not record anonymous removal analytics", error);
+    }
   }
 
   sendJson(response, 200, { ok: true, deleted });
@@ -639,6 +692,32 @@ async function handleAdminConnectionRequests(request, response) {
 
   const requests = await readConnectionRequests();
   sendJson(response, 200, { requests });
+}
+
+async function handleAdminRemovalEvents(request, response) {
+  if (!authorizeAdmin(request, response)) return;
+
+  if (request.method !== "GET") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const events = await readRemovalEvents();
+  const reasonCounts = Object.fromEntries(
+    [...removalReasons].map((reason) => [reason || "not_provided", 0])
+  );
+  for (const event of events) {
+    const reason = removalReasons.has(event.reason) && event.reason
+      ? event.reason
+      : "not_provided";
+    reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+  }
+
+  sendJson(response, 200, {
+    total: events.length,
+    reasonCounts,
+    events,
+  });
 }
 
 async function handleAdminConnectionRequest(request, response, pathname) {
@@ -1000,6 +1079,20 @@ async function writeConnectionRequests(requests) {
 
 async function readConnectionRequests() {
   const csv = await readFile(connectionRequestsFile, "utf8");
+  const [headerLine, ...lines] = csv.trim().split("\n");
+  if (!headerLine) return [];
+
+  const headers = parseCsvLine(headerLine);
+  return lines
+    .filter(Boolean)
+    .map((line) => {
+      const values = parseCsvLine(line);
+      return Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
+    });
+}
+
+async function readRemovalEvents() {
+  const csv = await readFile(removalEventsFile, "utf8");
   const [headerLine, ...lines] = csv.trim().split("\n");
   if (!headerLine) return [];
 

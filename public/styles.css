@@ -369,7 +369,8 @@ label {
   font-size: 0.9rem;
 }
 
-.staff-email-dialog {
+.staff-email-dialog,
+.removal-reason-dialog {
   width: min(560px, calc(100% - 24px));
   max-height: calc(100vh - 32px);
   margin: auto;
@@ -383,7 +384,8 @@ label {
   box-shadow: 0 18px 50px rgb(12 35 27 / 24%);
 }
 
-.staff-email-dialog::backdrop {
+.staff-email-dialog::backdrop,
+.removal-reason-dialog::backdrop {
   background: rgb(10 24 19 / 64%);
 }
 

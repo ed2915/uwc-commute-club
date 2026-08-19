@@ -47,7 +47,11 @@ const staffEmailDialog = document.querySelector("#staffEmailDialog");
 const staffEmailForm = document.querySelector("#staffEmailForm");
 const staffEmailStatus = document.querySelector("#staffEmailStatus");
 const cancelStaffEmailButton = document.querySelector("#cancelStaffEmail");
+const removalReasonDialog = document.querySelector("#removalReasonDialog");
+const removalReasonForm = document.querySelector("#removalReasonForm");
+const cancelRemovalReasonButton = document.querySelector("#cancelRemovalReason");
 let pendingStaffPayload = null;
+let pendingRemovalPayload = null;
 const selectedHeatmapDays = {
   to_uwc: "mon",
   from_uwc: "mon"
@@ -76,6 +80,11 @@ cancelStaffEmailButton.addEventListener("click", closeStaffEmailDialog);
 staffEmailDialog.addEventListener("cancel", () => {
   pendingStaffPayload = null;
 });
+removalReasonForm.addEventListener("submit", submitRemovalReason);
+cancelRemovalReasonButton.addEventListener("click", closeRemovalReasonDialog);
+removalReasonDialog.addEventListener("cancel", () => {
+  pendingRemovalPayload = null;
+});
 
 async function submitSelectedAction(action) {
   setActionStatus("", "");
@@ -96,7 +105,36 @@ async function submitSelectedAction(action) {
     return;
   }
 
+  if (action === "remove") {
+    pendingRemovalPayload = payload;
+    removalReasonForm.reset();
+    removalReasonDialog.showModal();
+    removalReasonForm.elements.removalReason.focus();
+    return;
+  }
+
   await performSelectedAction(action, payload);
+}
+
+async function submitRemovalReason(event) {
+  event.preventDefault();
+  if (!pendingRemovalPayload) {
+    closeRemovalReasonDialog();
+    return;
+  }
+
+  const payload = {
+    ...pendingRemovalPayload,
+    removalReason: clean(new FormData(removalReasonForm).get("removalReason"))
+  };
+  pendingRemovalPayload = null;
+  removalReasonDialog.close();
+  await performSelectedAction("remove", payload);
+}
+
+function closeRemovalReasonDialog() {
+  pendingRemovalPayload = null;
+  removalReasonDialog.close();
 }
 
 async function performSelectedAction(action, payload) {

@@ -51,6 +51,7 @@ The Render CSV can be inspected and maintained with the local Python script:
 export UWC_ADMIN_TOKEN="use-the-same-value-as-render-admin-token"
 python3 tools/render_submissions.py list
 python3 tools/render_submissions.py requests
+python3 tools/render_submissions.py removals
 python3 tools/render_submissions.py suggest-matches
 python3 tools/render_submissions.py dedupe
 python3 tools/render_submissions.py status-to-zero
@@ -185,7 +186,11 @@ should be deleted when they are no longer needed for the commute-club project.
 Students and staff can also remove a selected pool-interest record from the action panel
 by entering their UWC number, choosing the same direction, suburb,
 and day/time, and using the remove button. This deletes only that selected
-pool interest from the active database. Encrypted disaster-recovery backups
+pool interest from the active database. After a successful removal, an optional
+reason is written to `removal_events.csv` with the pool details and timestamp.
+The removal event does not contain a UWC number or email address and cannot be
+linked back to the person through that file. The admin `removals` command shows
+the anonymous total and reason breakdown. Encrypted disaster-recovery backups
 retain deleted records for up to 30 days, and Render snapshots may retain them
 for Render's snapshot-retention period. Recovery copies are used only to
 restore the service after data loss; they are not used for matching or contact

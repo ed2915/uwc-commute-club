@@ -58,6 +58,23 @@ REQUEST_FIELDS = [
     "notes",
 ]
 
+REMOVAL_FIELDS = [
+    "removed_at",
+    "direction",
+    "area",
+    "schedule",
+    "reason",
+]
+
+REMOVAL_REASON_LABELS = {
+    "carpool_formed": "Carpool formed or joined",
+    "plans_changed": "Travel plans changed",
+    "no_longer_commuting": "Commute no longer needed",
+    "joined_by_mistake": "Joined by mistake",
+    "other": "Other",
+    "not_provided": "Not provided",
+}
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -83,6 +100,7 @@ def main() -> int:
 
     subparsers.add_parser("list", help="List all submissions.")
     subparsers.add_parser("requests", help="List connection requests.")
+    subparsers.add_parser("removals", help="Show anonymous pool-removal analytics.")
     subparsers.add_parser("json", help="Print raw JSON.")
     dedupe_parser = subparsers.add_parser(
         "dedupe",
@@ -242,6 +260,8 @@ def main() -> int:
         elif args.command == "requests":
             requests = client.list_connection_requests()
             print_table(requests, fields=REQUEST_FIELDS)
+        elif args.command == "removals":
+            print_removal_analytics(client.list_removal_events())
         elif args.command == "json":
             print(json.dumps(client.list_submissions(), indent=2))
         elif args.command == "delete":
@@ -324,6 +344,19 @@ class AdminError(Exception):
     pass
 
 
+def print_removal_analytics(data: dict[str, object]) -> None:
+    total = int(data.get("total", 0))
+    counts = data.get("reasonCounts", {})
+    events = data.get("events", [])
+    print(f"Anonymous pool removals: {total}")
+    print("Reasons:")
+    for reason, label in REMOVAL_REASON_LABELS.items():
+        print(f"  {label}: {int(counts.get(reason, 0))}")
+    if events:
+        print()
+        print_table(events, fields=REMOVAL_FIELDS)
+
+
 class AdminClient:
     def __init__(self, base_url: str, token: str, insecure: bool = False) -> None:
         self.base_url = base_url.rstrip("/")
@@ -337,6 +370,9 @@ class AdminClient:
     def list_connection_requests(self) -> list[dict[str, str]]:
         data = self.request("GET", "/api/admin/connection-requests")
         return data.get("requests", [])
+
+    def list_removal_events(self) -> dict[str, object]:
+        return self.request("GET", "/api/admin/removal-events")
 
     def delete_submission(self, submission_id: str) -> dict[str, str]:
         path = f"/api/admin/submissions/{quote(submission_id, safe='')}"
