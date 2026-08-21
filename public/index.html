@@ -217,6 +217,7 @@
             <p>A staff number cannot be used to derive an email address. Staff will therefore be asked for their UWC email address in a separate window and must consent to its storage and sharing when needed to facilitate a pool connection.</p>
             <p>Public pool tables show aggregate counts only. Admin access is token-protected.</p>
             <p>Removing a pool deletes it from the active database. You may optionally provide a reason for leaving; that reason is stored separately without your UWC number or email address. Encrypted disaster-recovery backups and Render snapshots may retain the removed pool temporarily under their limited retention periods. Recovery copies are used only after data loss, not for matching or contact sharing.</p>
+            <p>Feedback is stored privately with your student or staff number so the organisers can follow up where necessary. Nothing is published unless you separately allow an anonymous excerpt and the organisers approve it.</p>
           </section>
 
           <label class="consent-check">
@@ -232,6 +233,42 @@
           <p class="field-help">If other people are already in this pool, the organiser can follow up with a consent email before any contact details are shared.</p>
           <p id="actionStatus" class="status" role="status"></p>
         </form>
+      </section>
+
+      <section class="feedback-section" aria-labelledby="feedbackTitle">
+        <div>
+          <h2 id="feedbackTitle">Share Feedback</h2>
+          <p class="hint">Tell the organisers how UWC Commute Club is working for you. For urgent safety concerns, email <a href="mailto:uwccommuteclub@uwc.ac.za">uwccommuteclub@uwc.ac.za</a> directly.</p>
+        </div>
+
+        <form id="feedbackForm" class="feedback-form">
+          <label>
+            Student or staff number
+            <input name="studentNumber" required autocomplete="off" inputmode="numeric" minlength="6" maxlength="7" pattern="[0-9]{6,7}">
+          </label>
+          <label>
+            Your feedback
+            <textarea name="comment" required minlength="10" maxlength="800" rows="5" placeholder="What has been useful, or what could be improved?"></textarea>
+          </label>
+          <label class="honeypot-field" aria-hidden="true" tabindex="-1">
+            Website
+            <input name="website" autocomplete="off" tabindex="-1">
+          </label>
+          <label class="consent-check">
+            <input type="checkbox" name="publishConsent" value="yes">
+            <span>You may publish an anonymous excerpt of my feedback on this page. My name, UWC number, email address, and pool details will not be shown.</span>
+          </label>
+          <button type="submit">Send feedback</button>
+          <p id="feedbackStatus" class="status" role="status"></p>
+        </form>
+
+        <div class="published-feedback" aria-labelledby="publishedFeedbackTitle">
+          <h3 id="publishedFeedbackTitle">Shared Experiences</h3>
+          <p class="hint">Published anonymously with permission.</p>
+          <div id="publishedFeedbackList" class="feedback-list" aria-live="polite">
+            <p class="empty-routes">No feedback has been shared yet.</p>
+          </div>
+        </div>
       </section>
 
       <dialog id="removalReasonDialog" class="staff-email-dialog removal-reason-dialog" aria-labelledby="removalReasonTitle" aria-describedby="removalReasonDescription">

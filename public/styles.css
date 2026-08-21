@@ -91,6 +91,7 @@ h3 {
 .popular-routes,
 .pool-lookup-section,
 .connect-section,
+.feedback-section,
 .contact-section,
 .draw-rules {
   display: grid;
@@ -229,9 +230,42 @@ h3 {
 }
 
 .connect-form,
-.pool-lookup-form {
+.pool-lookup-form,
+.feedback-form {
   display: grid;
   gap: 18px;
+}
+
+.feedback-section {
+  gap: 18px;
+}
+
+.feedback-form textarea {
+  min-height: 132px;
+  resize: vertical;
+}
+
+.published-feedback {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.feedback-list {
+  display: grid;
+  gap: 10px;
+}
+
+.feedback-quote {
+  margin: 0;
+  border-left: 4px solid var(--gold);
+  padding: 10px 12px;
+  background: #fffdf6;
+  color: var(--ink);
+  font-size: 0.96rem;
+  line-height: 1.55;
+  white-space: pre-line;
 }
 
 .pool-results {
@@ -858,6 +892,7 @@ button:disabled {
 
   .connect-section,
   .pool-lookup-section,
+  .feedback-section,
   .popular-routes,
   .service-preamble,
   .contact-section,
@@ -956,6 +991,7 @@ button:disabled {
   .popular-routes,
   .pool-lookup-section,
   .connect-section,
+  .feedback-section,
   .service-preamble,
   .contact-section,
   .draw-banner,

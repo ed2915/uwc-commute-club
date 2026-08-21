@@ -34,6 +34,9 @@ const actionForm = document.querySelector("#actionForm");
 const poolLookupForm = document.querySelector("#poolLookupForm");
 const poolLookupStatusMessage = document.querySelector("#poolLookupStatus");
 const poolLookupResults = document.querySelector("#poolLookupResults");
+const feedbackForm = document.querySelector("#feedbackForm");
+const feedbackStatusMessage = document.querySelector("#feedbackStatus");
+const publishedFeedbackList = document.querySelector("#publishedFeedbackList");
 const actionStatusMessage = document.querySelector("#actionStatus");
 const toUwcRoutes = document.querySelector("#toUwcRoutes");
 const fromUwcRoutes = document.querySelector("#fromUwcRoutes");
@@ -43,6 +46,7 @@ const studentNumberInput = actionForm.elements.studentNumber;
 const addInterestButton = document.querySelector("#addInterest");
 const removeInterestButton = document.querySelector("#removeInterest");
 const poolLookupStudentNumberInput = poolLookupForm.elements.studentNumber;
+const feedbackStudentNumberInput = feedbackForm.elements.studentNumber;
 const staffEmailDialog = document.querySelector("#staffEmailDialog");
 const staffEmailForm = document.querySelector("#staffEmailForm");
 const staffEmailStatus = document.querySelector("#staffEmailStatus");
@@ -59,6 +63,7 @@ const selectedHeatmapDays = {
 
 populateScheduleOptions();
 loadPopularRoutes();
+loadPublishedFeedback();
 
 studentNumberInput.addEventListener("input", () => {
   studentNumberInput.value = normalizeStudentNumber(studentNumberInput.value);
@@ -68,10 +73,16 @@ poolLookupStudentNumberInput.addEventListener("input", () => {
   poolLookupStudentNumberInput.value = normalizeStudentNumber(poolLookupStudentNumberInput.value);
 });
 
+feedbackStudentNumberInput.addEventListener("input", () => {
+  feedbackStudentNumberInput.value = normalizeStudentNumber(feedbackStudentNumberInput.value);
+});
+
 poolLookupForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   await lookupStudentPools();
 });
+
+feedbackForm.addEventListener("submit", submitFeedback);
 
 addInterestButton.addEventListener("click", () => submitSelectedAction("add"));
 removeInterestButton.addEventListener("click", () => submitSelectedAction("remove"));
@@ -293,6 +304,70 @@ async function lookupStudentPools() {
   }
 }
 
+async function submitFeedback(event) {
+  event.preventDefault();
+  setFeedbackStatus("", "");
+
+  const formData = new FormData(feedbackForm);
+  const studentNumber = normalizeStudentNumber(formData.get("studentNumber"));
+  const comment = clean(formData.get("comment"));
+
+  if (!isValidUwcNumber(studentNumber)) {
+    setFeedbackStatus("Enter a valid student or staff number.", "error");
+    return;
+  }
+  if (comment.length < 10) {
+    setFeedbackStatus("Please write a little more feedback before sending.", "error");
+    return;
+  }
+
+  const button = feedbackForm.querySelector("button");
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        studentNumber,
+        comment,
+        publishConsent: formData.get("publishConsent") === "yes",
+        website: clean(formData.get("website"))
+      })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not send feedback");
+
+    feedbackForm.reset();
+    setFeedbackStatus("Thank you. Your feedback has been sent to the organisers for review.", "success");
+  } catch (error) {
+    setFeedbackStatus(error.message, "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function loadPublishedFeedback() {
+  try {
+    const response = await fetch("/api/feedback");
+    const result = await response.json();
+    if (!response.ok) throw new Error("Could not load feedback");
+    renderPublishedFeedback(result.comments || []);
+  } catch {
+    publishedFeedbackList.innerHTML = `<p class="empty-routes">Shared feedback could not be loaded.</p>`;
+  }
+}
+
+function renderPublishedFeedback(comments) {
+  if (comments.length === 0) {
+    publishedFeedbackList.innerHTML = `<p class="empty-routes">No feedback has been shared yet.</p>`;
+    return;
+  }
+
+  publishedFeedbackList.innerHTML = comments.map(({ comment }) => `
+    <blockquote class="feedback-quote">${escapeHtml(comment)}</blockquote>
+  `).join("");
+}
+
 function renderStudentPools(pools) {
   if (pools.length === 0) {
     poolLookupResults.innerHTML = `<p class="empty-routes">No pools found.</p>`;
@@ -479,6 +554,11 @@ function setActionStatus(message, tone) {
 function setPoolLookupStatus(message, tone) {
   poolLookupStatusMessage.textContent = message;
   poolLookupStatusMessage.dataset.tone = tone;
+}
+
+function setFeedbackStatus(message, tone) {
+  feedbackStatusMessage.textContent = message;
+  feedbackStatusMessage.dataset.tone = tone;
 }
 
 function setStaffEmailStatus(message, tone) {

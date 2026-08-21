@@ -66,6 +66,19 @@ REMOVAL_FIELDS = [
     "reason",
 ]
 
+FEEDBACK_FIELDS = [
+    "id",
+    "submitted_at",
+    "student_number",
+    "contact_email",
+    "comment",
+    "publish_consent",
+    "status",
+    "public_comment",
+    "reviewed_at",
+    "organiser_notes",
+]
+
 REMOVAL_REASON_LABELS = {
     "carpool_formed": "Carpool formed or joined",
     "plans_changed": "Travel plans changed",
@@ -101,6 +114,7 @@ def main() -> int:
     subparsers.add_parser("list", help="List all submissions.")
     subparsers.add_parser("requests", help="List connection requests.")
     subparsers.add_parser("removals", help="Show anonymous pool-removal analytics.")
+    subparsers.add_parser("feedback", help="List private feedback for organiser review.")
     subparsers.add_parser("json", help="Print raw JSON.")
     dedupe_parser = subparsers.add_parser(
         "dedupe",
@@ -245,6 +259,31 @@ def main() -> int:
         help="Delete expired pool and connection-request rows. Without this, only prints them.",
     )
 
+    feedback_approve_parser = subparsers.add_parser(
+        "feedback-approve",
+        help="Publish an approved anonymised feedback excerpt.",
+    )
+    feedback_approve_parser.add_argument("id")
+    feedback_approve_parser.add_argument(
+        "--public-comment",
+        required=True,
+        help="Anonymised text to show publicly.",
+    )
+    feedback_approve_parser.add_argument("--notes", default="")
+
+    feedback_reject_parser = subparsers.add_parser(
+        "feedback-reject",
+        help="Keep feedback private and mark it as not approved for publication.",
+    )
+    feedback_reject_parser.add_argument("id")
+    feedback_reject_parser.add_argument("--notes", default="")
+
+    feedback_delete_parser = subparsers.add_parser(
+        "feedback-delete",
+        help="Permanently delete a feedback record.",
+    )
+    feedback_delete_parser.add_argument("id")
+
     args = parser.parse_args()
 
     if not args.token:
@@ -262,6 +301,8 @@ def main() -> int:
             print_table(requests, fields=REQUEST_FIELDS)
         elif args.command == "removals":
             print_removal_analytics(client.list_removal_events())
+        elif args.command == "feedback":
+            print_table(client.list_feedback(), fields=FEEDBACK_FIELDS)
         elif args.command == "json":
             print(json.dumps(client.list_submissions(), indent=2))
         elif args.command == "delete":
@@ -270,6 +311,24 @@ def main() -> int:
         elif args.command == "delete-request":
             result = client.delete_connection_request(args.id)
             print(f"Deleted request {result.get('deleted', args.id)}")
+        elif args.command == "feedback-approve":
+            result = client.patch_feedback(args.id, {
+                "status": "approved",
+                "public_comment": args.public_comment,
+                "organiser_notes": args.notes,
+            })
+            print("Feedback approved and published anonymously:")
+            print_table([result["feedback"]], fields=FEEDBACK_FIELDS)
+        elif args.command == "feedback-reject":
+            result = client.patch_feedback(args.id, {
+                "status": "rejected",
+                "organiser_notes": args.notes,
+            })
+            print("Feedback kept private:")
+            print_table([result["feedback"]], fields=FEEDBACK_FIELDS)
+        elif args.command == "feedback-delete":
+            result = client.delete_feedback(args.id)
+            print(f"Deleted feedback {result.get('deleted', args.id)}")
         elif args.command == "dedupe":
             submissions = client.list_submissions()
             plan = dedupe_plan(submissions)
@@ -374,6 +433,10 @@ class AdminClient:
     def list_removal_events(self) -> dict[str, object]:
         return self.request("GET", "/api/admin/removal-events")
 
+    def list_feedback(self) -> list[dict[str, str]]:
+        data = self.request("GET", "/api/admin/feedback")
+        return data.get("feedback", [])
+
     def delete_submission(self, submission_id: str) -> dict[str, str]:
         path = f"/api/admin/submissions/{quote(submission_id, safe='')}"
         return self.request("DELETE", path)
@@ -385,6 +448,14 @@ class AdminClient:
     def patch_submission(self, submission_id: str, patch: dict[str, str]) -> dict[str, object]:
         path = f"/api/admin/submissions/{quote(submission_id, safe='')}"
         return self.request("PATCH", path, patch)
+
+    def patch_feedback(self, feedback_id: str, patch: dict[str, str]) -> dict[str, object]:
+        path = f"/api/admin/feedback/{quote(feedback_id, safe='')}"
+        return self.request("PATCH", path, patch)
+
+    def delete_feedback(self, feedback_id: str) -> dict[str, str]:
+        path = f"/api/admin/feedback/{quote(feedback_id, safe='')}"
+        return self.request("DELETE", path)
 
     def request(self, method: str, path: str, body: dict[str, str] | None = None) -> dict:
         payload = None

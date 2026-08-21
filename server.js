@@ -10,6 +10,7 @@ const dataDir = process.env.DATA_DIR || join(__dirname, "data");
 const submissionsFile = join(dataDir, "submissions.csv");
 const connectionRequestsFile = join(dataDir, "connection_requests.csv");
 const removalEventsFile = join(dataDir, "removal_events.csv");
+const feedbackFile = join(dataDir, "feedback.csv");
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || (process.env.RENDER ? "0.0.0.0" : "127.0.0.1");
 const adminToken = process.env.ADMIN_TOKEN || "";
@@ -58,6 +59,21 @@ const removalEventHeaders = [
   "reason",
 ];
 
+const feedbackHeaders = [
+  "id",
+  "submitted_at",
+  "student_number",
+  "comment",
+  "publish_consent",
+  "status",
+  "public_comment",
+  "reviewed_at",
+  "organiser_notes",
+];
+
+const feedbackStatuses = new Set(["pending", "approved", "rejected"]);
+const maxFeedbackLength = 800;
+
 const removalReasons = new Set([
   "",
   "carpool_formed",
@@ -79,6 +95,7 @@ await mkdir(dataDir, { recursive: true });
 await ensureCsvFile();
 await ensureConnectionRequestsFile();
 await ensureRemovalEventsFile();
+await ensureFeedbackFile();
 
 createServer(async (request, response) => {
   try {
@@ -104,6 +121,11 @@ createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/api/feedback") {
+      await handleFeedback(request, response);
+      return;
+    }
+
     if (request.method === "GET" && url.pathname === "/consent") {
       await handleConsentResponse(url, response);
       return;
@@ -116,6 +138,11 @@ createServer(async (request, response) => {
 
     if (request.method === "GET" && url.pathname === "/api/student-pools") {
       await handleStudentPools(url, response);
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/feedback") {
+      await handlePublishedFeedback(response);
       return;
     }
 
@@ -134,6 +161,11 @@ createServer(async (request, response) => {
       return;
     }
 
+    if (url.pathname === "/api/admin/feedback") {
+      await handleAdminFeedback(request, response);
+      return;
+    }
+
     if (url.pathname.startsWith("/api/admin/connection-requests/")) {
       await handleAdminConnectionRequest(request, response, url.pathname);
       return;
@@ -141,6 +173,11 @@ createServer(async (request, response) => {
 
     if (url.pathname.startsWith("/api/admin/submissions/")) {
       await handleAdminSubmission(request, response, url.pathname);
+      return;
+    }
+
+    if (url.pathname.startsWith("/api/admin/feedback/")) {
+      await handleAdminFeedbackItem(request, response, url.pathname);
       return;
     }
 
@@ -190,6 +227,14 @@ async function ensureRemovalEventsFile() {
     await stat(removalEventsFile);
   } catch {
     await appendFile(removalEventsFile, `${removalEventHeaders.join(",")}\n`);
+  }
+}
+
+async function ensureFeedbackFile() {
+  try {
+    await stat(feedbackFile);
+  } catch {
+    await appendFile(feedbackFile, `${feedbackHeaders.join(",")}\n`);
   }
 }
 
@@ -505,7 +550,8 @@ function isPublicWriteRequest(request, url) {
   return request.method === "POST" && [
     "/api/submissions",
     "/api/remove-student-number",
-    "/api/connection-requests"
+    "/api/connection-requests",
+    "/api/feedback"
   ].includes(url.pathname);
 }
 
@@ -670,6 +716,68 @@ async function handleStudentPools(url, response) {
   sendJson(response, 200, { pools });
 }
 
+async function handleFeedback(request, response) {
+  const payload = await readRequestJson(request);
+
+  if (isLikelyBotPayload(payload)) {
+    logSecurityEvent(request, "honeypot", { path: "/api/feedback" });
+    sendJson(response, 201, { ok: true });
+    return;
+  }
+
+  const studentNumber = normalizeStudentNumber(payload.studentNumber);
+  const comment = normalizeFeedbackText(payload.comment);
+
+  if (!isValidUwcNumber(studentNumber)) {
+    sendJson(response, 400, { error: "Enter a valid student or staff number" });
+    return;
+  }
+
+  if (comment.length < 10 || comment.length > maxFeedbackLength) {
+    sendJson(response, 400, { error: `Write feedback between 10 and ${maxFeedbackLength} characters` });
+    return;
+  }
+
+  const submissions = await readSubmissions();
+  const belongsToActivePool = submissions.some((submission) =>
+    submissionIdentityKey(submission) === studentNumber &&
+    isActiveStatus(submission.status) &&
+    isUsableSubmission(submission)
+  );
+
+  if (!belongsToActivePool) {
+    sendJson(response, 400, { error: "Join a pool before sharing feedback" });
+    return;
+  }
+
+  const feedback = await readFeedback();
+  const row = {
+    id: createFeedbackId(),
+    submitted_at: localTimestamp(),
+    student_number: studentNumber,
+    comment,
+    publish_consent: payload.publishConsent === true ? "yes" : "",
+    status: "pending",
+    public_comment: "",
+    reviewed_at: "",
+    organiser_notes: "",
+  };
+  feedback.push(row);
+  await writeFeedback(feedback);
+  sendJson(response, 201, { ok: true });
+}
+
+async function handlePublishedFeedback(response) {
+  const feedback = await readFeedback();
+  const comments = feedback
+    .filter((item) => item.status === "approved" && item.publish_consent === "yes" && item.public_comment)
+    .map((item) => ({ comment: item.public_comment }))
+    .slice(-12)
+    .reverse();
+
+  sendJson(response, 200, { comments });
+}
+
 async function handleAdminSubmissions(request, response) {
   if (!authorizeAdmin(request, response)) return;
 
@@ -718,6 +826,73 @@ async function handleAdminRemovalEvents(request, response) {
     reasonCounts,
     events,
   });
+}
+
+async function handleAdminFeedback(request, response) {
+  if (!authorizeAdmin(request, response)) return;
+
+  if (request.method !== "GET") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const submissions = await readSubmissions();
+  const feedback = await readFeedback();
+  const items = feedback.map((item) => ({
+    ...item,
+    contact_email: feedbackContactEmail(item.student_number, submissions),
+  }));
+  sendJson(response, 200, { feedback: items });
+}
+
+async function handleAdminFeedbackItem(request, response, pathname) {
+  if (!authorizeAdmin(request, response)) return;
+
+  const id = decodeURIComponent(pathname.replace("/api/admin/feedback/", ""));
+  if (!id) {
+    sendJson(response, 400, { error: "Feedback id is required" });
+    return;
+  }
+
+  const feedback = await readFeedback();
+  const index = feedback.findIndex((item) => item.id === id);
+  if (index === -1) {
+    sendJson(response, 404, { error: "Feedback not found" });
+    return;
+  }
+
+  if (request.method === "DELETE") {
+    feedback.splice(index, 1);
+    await writeFeedback(feedback);
+    sendJson(response, 200, { ok: true, deleted: id });
+    return;
+  }
+
+  if (request.method !== "PATCH") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const payload = await readRequestJson(request);
+  const validationError = validateFeedbackPatch(payload);
+  if (validationError) {
+    sendJson(response, 400, { error: validationError });
+    return;
+  }
+
+  if (payload.status === "approved" && feedback[index].publish_consent !== "yes") {
+    sendJson(response, 400, { error: "This person did not permit anonymous publication" });
+    return;
+  }
+
+  const next = {
+    ...feedback[index],
+    ...payload,
+    reviewed_at: localTimestamp(),
+  };
+  feedback[index] = next;
+  await writeFeedback(feedback);
+  sendJson(response, 200, { ok: true, feedback: next });
 }
 
 async function handleAdminConnectionRequest(request, response, pathname) {
@@ -873,6 +1048,35 @@ function validateAdminPatch(payload) {
   return "";
 }
 
+function validateFeedbackPatch(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "Patch body must be an object";
+
+  const allowedFields = new Set(["status", "public_comment", "organiser_notes"]);
+  const fields = Object.keys(payload);
+  if (fields.length === 0) return "Patch body is empty";
+  if (!fields.every((field) => allowedFields.has(field))) return "Patch contains an unsupported field";
+
+  if ("status" in payload && !feedbackStatuses.has(String(payload.status))) {
+    return "Feedback status is invalid";
+  }
+  if ("public_comment" in payload && normalizeFeedbackText(payload.public_comment).length > maxFeedbackLength) {
+    return `Public comment must be no more than ${maxFeedbackLength} characters`;
+  }
+  if ("organiser_notes" in payload && normalizeFeedbackText(payload.organiser_notes).length > maxFeedbackLength) {
+    return `Organiser notes must be no more than ${maxFeedbackLength} characters`;
+  }
+  if (payload.status === "approved" && !normalizeFeedbackText(payload.public_comment)) {
+    return "Provide an anonymised public comment before approving feedback";
+  }
+
+  for (const field of fields) {
+    payload[field] = field === "status"
+      ? String(payload[field] || "").trim()
+      : normalizeFeedbackText(payload[field]);
+  }
+  return "";
+}
+
 function isText(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -1012,6 +1216,10 @@ function createConnectionRequestId() {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function createFeedbackId() {
+  return `fb_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function createConsentToken() {
   return randomBytes(24).toString("hex");
 }
@@ -1105,6 +1313,32 @@ async function readRemovalEvents() {
     });
 }
 
+async function readFeedback() {
+  const csv = await readFile(feedbackFile, "utf8");
+  const [headerLine, ...lines] = csv.trim().split("\n");
+  if (!headerLine) return [];
+
+  const headers = parseCsvLine(headerLine);
+  return lines
+    .filter(Boolean)
+    .map((line) => {
+      const values = parseCsvLine(line);
+      return Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
+    });
+}
+
+async function writeFeedback(feedback) {
+  const lines = [
+    feedbackHeaders.join(","),
+    ...feedback.map((item) => feedbackHeaders
+      .map((header) => csvCell(item[header] || ""))
+      .join(","))
+  ];
+  const tempFile = `${feedbackFile}.tmp`;
+  await writeFile(tempFile, `${lines.join("\n")}\n`);
+  await rename(tempFile, feedbackFile);
+}
+
 function parseCsvLine(line) {
   const cells = [];
   let cell = "";
@@ -1136,6 +1370,22 @@ function normalizeArea(area) {
     .trim()
     .replace(/\s+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function normalizeFeedbackText(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\r\n?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function feedbackContactEmail(studentNumber, submissions) {
+  if (isValidStudentNumber(studentNumber)) return `${studentNumber}@myuwc.ac.za`;
+  const staffSubmission = submissions.find((submission) =>
+    submissionIdentityKey(submission) === studentNumber &&
+    isUsableSubmission(submission)
+  );
+  return staffSubmission?.email_address || "";
 }
 
 function csvCell(value) {
