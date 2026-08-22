@@ -650,6 +650,9 @@ def print_target_emails(
         print()
         print_safety_and_responsibility_note()
         print()
+        print("If you make contact or find the service useful, you are welcome to leave private feedback on the UWC Commute Club webpage.")
+        print("You can choose whether an anonymous excerpt may be shared after organiser review.")
+        print()
         print("Thank you.")
 
     if not apply:
